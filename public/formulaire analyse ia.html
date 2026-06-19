@@ -1,0 +1,57 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./style/style.css">
+  <title>Planète Flora - formulaire analyse IA</title>
+
+</head>
+
+<body>
+
+  <section class="upload-section" id="analyse">
+
+  <div class="upload-box">
+
+    <h2>🌿 Analyse IA</h2>
+
+    <form
+      id="analyseForm"
+      enctype="multipart/form-data"
+    >
+
+      <label for="imageInput">Sélectionnez une image</label>
+      <input
+        id="imageInput"
+        type="file"
+        name="image"
+        accept="image/*"
+        title="Sélectionner une image à analyser"
+        required
+      >
+
+      <button
+        type="button"
+        class="btn"
+        id="gpsBtn"
+      >
+        📍 Activer GPS
+      </button>
+
+      <br><br>
+
+      <button type="submit" class="btn">
+        🔍 Analyser
+      </button>
+
+    </form>
+
+  </div>
+
+</section>
+</body>
+</html>
+
+

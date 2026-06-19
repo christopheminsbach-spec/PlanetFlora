@@ -1,0 +1,18 @@
+model plants {
+  id                Int      @id @default(autoincrement())
+  scientific_name   String   @unique
+  common_name       String?
+  description       String?
+
+  analyses          analyses[]
+}
+
+model analyses {
+  id            Int       @id @default(autoincrement())
+  plant_id      Int
+  image_path    String
+  confidence    Float
+  analysed_at   DateTime @default(now())
+
+  plant         plants @relation(fields: [plant_id], references: [id])
+}

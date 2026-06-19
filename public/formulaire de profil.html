@@ -1,0 +1,70 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./style/style.css">
+  <title>Planète Flora - formulaire utilisateur</title>
+
+</head>
+
+<body>
+
+<!-- PROFIL -->
+<section class="upload-section">
+
+  <div class="upload-box">
+
+    <h2>👤 Mon Profil</h2>
+
+    <form
+      id="profileForm"
+      enctype="multipart/form-data"
+    >
+
+      <label for="username">Nom utilisateur</label>
+      <input
+        id="username"
+        name="username"
+        type="text"
+        placeholder="Nom utilisateur"
+      >
+
+      <label for="email">Email</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        placeholder="Email"
+      >
+
+      <label for="password">Nouveau mot de passe</label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        placeholder="Nouveau mot de passe"
+      >
+
+      <label for="avatar">Photo de profil</label>
+      <input
+        id="avatar"
+        name="avatar"
+        type="file"
+        accept="image/*"
+      >
+
+      <button class="btn" type="submit">
+        Mettre à jour
+      </button>
+
+    </form>
+
+  </div>
+
+</section>
+</body>
+</html>
+
+

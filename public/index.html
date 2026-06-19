@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet"href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+  <title>🌿 Planète Flora</title>
+
+  <link rel="stylesheet" href="./style/style.css">
+</head>
+
+<body>
+
+<header>
+  <h1>🌿 Planète Flora</h1>
+
+  <nav>
+    <ul>
+      <li><a href="#auth">Connexion</a></li>
+      <li><a href="#upload">Analyse</a></li>
+      <li><a href="#results">Résultats</a></li>
+      <li><a href="#history">Historique</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+    </ul>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="hero-content">
+    <h2>Diagnostic Intelligent des Plantes</h2>
+
+    <p>
+      Analysez vos plantes avec l'intelligence artificielle PlantNet
+    </p>
+
+    <a href="#upload" class="btn">
+      Commencer
+    </a>
+  </div>
+</section>
+
+<section class="features" id="auth">
+
+  <!-- CONNEXION -->
+  <div class="card">
+
+    <h3>🔓 Connexion</h3>
+
+    <form id="loginForm">
+
+      <input
+        type="email"
+        id="email"
+        placeholder="Votre email"
+        required
+      >
+
+      <input
+        type="password"
+        id="password"
+        placeholder="Votre mot de passe"
+        required
+      >
+
+      <button
+        type="submit"
+        class="btn"
+      >
+        Se connecter
+      </button>
+
+    </form>
+
+  </div>
+
+  <!-- INSCRIPTION -->
+  <div class="card">
+
+    <h3>📝 Inscription</h3>
+
+    <form id="registerForm">
+
+      <input
+        type="text"
+        id="registerUsername"
+        placeholder="Nom utilisateur"
+        required
+      >
+
+      <input
+        type="email"
+        id="registerEmail"
+        placeholder="Email"
+        required
+      >
+
+      <input
+        type="password"
+        id="registerPassword"
+        placeholder="Mot de passe"
+        required
+      >
+
+      <button
+        type="submit"
+        class="btn"
+      >
+        Créer mon compte
+      </button>
+
+    </form>
+
+  </div>
+
+</section>
+
+<!-- Analyse -->
+<section class="upload-section" id="upload">
+
+  <div class="upload-box">
+
+    <h2>🌿 Analyse d'une plante</h2>
+
+    <form
+      id="uploadForm"
+      enctype="multipart/form-data"
+    >
+
+      <label for="plant-image">Image de la plante</label>
+      <input
+        id="plant-image"
+        type="file"
+        accept="image/*"
+        required
+      >
+
+      <button
+        type="button"
+        id="gpsBtn"
+        class="btn"
+      >
+        📍 Activer GPS
+      </button>
+
+      <button
+        type="submit"
+        class="btn"
+      >
+        🔍 Analyser
+      </button>
+
+    </form>
+
+    <div id="loader" hidden>
+      Analyse en cours...
+    </div>
+
+  </div>
+
+</section>
+
+<!-- Résultat -->
+<section class="results" id="results">
+
+  <h2>Résultat du diagnostic</h2>
+
+  <div id="result-container">
+    <p>Aucune analyse effectuée.</p>
+  </div>
+
+</section>
+
+<!-- Favoris -->
+<section class="dashboard">
+
+  <div class="dashboard-title">
+    <h2>❤️ Mes Favoris</h2>
+  </div>
+
+  <div
+    class="dashboard-grid"
+    id="favoritesContainer"
+  ></div>
+
+</section>
+
+<!-- Historique -->
+<section class="history" id="history">
+
+  <h2>📜 Historique des analyses</h2>
+
+  <div
+    class="dashboard-grid"
+    id="historyContainer"
+  ></div>
+
+</section>
+
+<!-- Dashboard -->
+<section
+  class="dashboard"
+  id="dashboard"
+>
+
+  <div class="dashboard-title">
+    <h2>📊 Dashboard Utilisateur</h2>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="dashboard-card">
+      <h4>Analyses</h4>
+      <p id="totalAnalyses">0</p>
+    </div>
+
+    <div class="dashboard-card">
+      <h4>Favoris</h4>
+      <p id="totalFavorites">0</p>
+    </div>
+
+    <div class="dashboard-card">
+      <h4>Localisation</h4>
+      <p id="userLocation">
+        Non détectée
+      </p>
+    </div>
+
+  </div>
+
+</section>
+
+<footer>
+  <p>© 2026 Planète Flora</p>
+</footer>
+
+<script src="/api.js" defer></script>
+
+
+</body>
+</html>
