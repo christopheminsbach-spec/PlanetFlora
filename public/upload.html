@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planet Flora AI</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #0f172a;
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+
+.card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 15px;
+    max-width: 400px;
+    margin: auto;
+}
+
+img {
+    width: 100%;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+button {
+    padding: 10px;
+    margin-top: 10px;
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    background: #22c55e;
+    color: white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>🌿 Planet Flora AI</h2>
+
+<label for="imageInput">Choisir une image</label>
+<input type="file" id="imageInput">
+
+<img id="preview" alt="Aperçu de l'image sélectionnée">
+
+<h3 id="result">Résultat...</h3>
+<p id="confidence"></p>
+
+</div>
+
+<script>
+const input = document.getElementById("imageInput");
+const preview = document.getElementById("preview");
+const result = document.getElementById("result");
+const confidence = document.getElementById("confidence");
+
+input.addEventListener("change", async (e) => {
+
+    const file = e.target.files[0];
+    if (!file) return;
+
+    preview.src = URL.createObjectURL(file);
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+        const res = await fetch("http://localhost:3001/api/predict", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        console.log("API:", data);
+
+        result.innerText = "🌿 " + data.prediction;
+        confidence.innerText = "📊 " + (data.confidence * 100).toFixed(1) + "%";
+
+    } catch (err) {
+        console.error(err);
+        result.innerText = "❌ erreur serveur";
+    }
+});
+</script>
+
+</body>
+</html>

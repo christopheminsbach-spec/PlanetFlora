@@ -1,18 +1,38 @@
-model plants {
-  id                Int      @id @default(autoincrement())
-  scientific_name   String   @unique
-  common_name       String?
-  description       String?
-
-  analyses          analyses[]
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
-model analyses {
-  id            Int       @id @default(autoincrement())
-  plant_id      Int
-  image_path    String
-  confidence    Float
-  analysed_at   DateTime @default(now())
+generator client {
+  provider = "prisma-client-js"
+}
 
-  plant         plants @relation(fields: [plant_id], references: [id])
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String
+  email     String   @unique
+  password  String
+
+  predictions Prediction[]
+  favorites   Favorite[]
+}
+
+model Prediction {
+  id        Int      @id @default(autoincrement())
+  imageUrl  String
+  result    String
+  confidence Float
+
+  userId    Int?
+  user      User? @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Favorite {
+  id     Int @id @default(autoincrement())
+  name   String
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 }

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plant AI</title>
+
+<link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+
+<div class="card">
+    <h2>🌿 Plant AI</h2>
+
+    <p class="subtitle">
+        Identifiez vos plantes grâce à l'IA
+    </p>
+
+    <!-- ZONE UPLOAD MODERNE -->
+    <div id="uploadBox" class="upload-box">
+        <p>📷 Cliquez ici pour choisir une image</p>
+        <small>ou déposer une image ici</small>
+    </div>
+
+    <!-- input caché -->
+    <input type="file" id="img" accept="image/*" hidden>
+
+    <!-- preview -->
+    <img id="preview" style="display:none;" />
+
+    <!-- résultat -->
+    <h3 id="result">Résultat...</h3>
+    <div id="conf"></div>
+</div>
+
+<script src="./js/plant.js"></script>
+
+</body>
+</html>

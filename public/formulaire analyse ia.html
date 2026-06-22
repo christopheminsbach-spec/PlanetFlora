@@ -1,57 +1,41 @@
+<style>
+#preview {
+    max-width: 300px;
+    display: block;
+    margin-top: 10px;
+}
+</style>
 
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="./style/style.css">
-  <title>Planète Flora - formulaire analyse IA</title>
+<label for="imageInput">Choisir une image :</label>
+<input type="file" id="imageInput" name="image" accept="image/*">
 
-</head>
+<img id="preview" alt="Aperçu de l'image sélectionnée">
 
-<body>
+<h2 id="result"></h2>
+<p id="confidence"></p>
 
-  <section class="upload-section" id="analyse">
+<script>
+const input = document.getElementById("imageInput");
+const preview = document.getElementById("preview");
+const result = document.getElementById("result");
+const confidence = document.getElementById("confidence");
 
-  <div class="upload-box">
+input.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
 
-    <h2>🌿 Analyse IA</h2>
+    preview.src = URL.createObjectURL(file);
 
-    <form
-      id="analyseForm"
-      enctype="multipart/form-data"
-    >
+    const formData = new FormData();
+    formData.append("image", file);
 
-      <label for="imageInput">Sélectionnez une image</label>
-      <input
-        id="imageInput"
-        type="file"
-        name="image"
-        accept="image/*"
-        title="Sélectionner une image à analyser"
-        required
-      >
+    const res = await fetch("/api/predict", {
+        method: "POST",
+        body: formData
+    });
 
-      <button
-        type="button"
-        class="btn"
-        id="gpsBtn"
-      >
-        📍 Activer GPS
-      </button>
+    const data = await res.json();
 
-      <br><br>
-
-      <button type="submit" class="btn">
-        🔍 Analyser
-      </button>
-
-    </form>
-
-  </div>
-
-</section>
-</body>
-</html>
-
-
+    result.innerText = "🌿 " + data.prediction;
+    confidence.innerText = "📊 confiance: " + data.confidence;
+});
+</script>
