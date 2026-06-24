@@ -1,3 +1,8 @@
+import axios from "axios";
+
+export default axios.create({
+  baseURL: "http://localhost:3000",
+});
 console.log("SCRIPT OK");
 
 console.log("Planète Flora chargé");

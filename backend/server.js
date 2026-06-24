@@ -1,54 +1,44 @@
-require("dotenv").config();
-
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const { PrismaClient } = require("@prisma/client");
-
-const authRoutes = require("./routes/auth.routes");
-const predictRoutes = require("./routes/predict.routes");
-const historyRoutes = require("./routes/history.routes");
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import plantsRoutes from "./routes/plants.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
-const prisma = new PrismaClient();
+const PORT = Number(process.env.PORT) || 3000;
 
-const PORT = process.env.PORT || 3000;
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+  })
+);
 
-/* ---------------- MIDDLEWARE ---------------- */
-app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-/* ---------------- FRONTEND ---------------- */
-app.use("/", express.static(path.join(__dirname, "../public")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-/* ---------------- ROUTES ---------------- */
-app.use("/api/auth", authRoutes);
-app.use("/api", predictRoutes);
-app.use("/api/history", historyRoutes);
-
-/* ---------------- HEALTH ---------------- */
-app.get("/", (req, res) => {
+app.get("/health", (req, res) => {
   res.json({
-    success: true,
-    app: "Planet Flora",
-    status: "online"
+    status: "ok",
+    message: "Planet Flora API active",
+    port: PORT,
   });
 });
 
-/* ---------------- START ---------------- */
-async function start() {
-  try {
-    await prisma.$connect();
-    console.log("🌿 Prisma connecté");
+app.use("/plants", plantsRoutes);
+app.use("/auth", authRoutes);
 
-    app.listen(PORT, () => {
-      console.log(`🚀 http://localhost:${PORT}`);
-    });
-  } catch (err) {
-    console.error("DB error:", err);
-  }
-}
+app.use((req, res) => {
+  res.status(404).json({
+    message: `Route introuvable : ${req.method} ${req.originalUrl}`,
+  });
+});
 
-start();
+app.use((error, req, res, next) => {
+  console.error(error);
+  res.status(500).json({
+    message: "Erreur interne du serveur",
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 API Planet Flora : http://localhost:${PORT}`);
+});

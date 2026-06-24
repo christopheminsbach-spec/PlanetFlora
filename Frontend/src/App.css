@@ -1,0 +1,179 @@
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
+  background:#f7f8fa;
+  color:#111;
+}
+
+.navbar{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  background:white;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:18px 40px;
+  box-shadow:0 2px 20px rgba(0,0,0,.05);
+  z-index:1000;
+}
+
+.logo{
+  font-size:24px;
+  font-weight:700;
+}
+
+.menu{
+  display:flex;
+  gap:25px;
+}
+
+.menu a{
+  text-decoration:none;
+  color:#333;
+  font-weight:500;
+}
+
+.menu a:hover{
+  color:#2e7d32;
+}
+
+.menu-btn{
+  display:none;
+  border:none;
+  background:none;
+  font-size:28px;
+  cursor:pointer;
+}
+
+.hero{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:120px 20px;
+  background:
+  linear-gradient(
+  135deg,
+  #2e7d32,
+  #43a047,
+  #66bb6a
+  );
+  color:white;
+}
+
+.hero-content{
+  max-width:800px;
+}
+
+.hero h1{
+  font-size:4rem;
+  margin-bottom:25px;
+}
+
+.hero p{
+  font-size:1.3rem;
+  opacity:.9;
+  margin-bottom:40px;
+}
+
+.hero-buttons{
+  display:flex;
+  gap:20px;
+  justify-content:center;
+}
+
+.primary{
+  background:white;
+  color:#2e7d32;
+}
+
+.secondary{
+  background:transparent;
+  border:2px solid white;
+  color:white;
+}
+
+.hero button{
+  padding:16px 28px;
+  border:none;
+  border-radius:16px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.features{
+  max-width:1400px;
+  margin:auto;
+  padding:80px 30px;
+  display:grid;
+  grid-template-columns:
+  repeat(auto-fit,minmax(280px,1fr));
+  gap:30px;
+}
+
+.card{
+  background:white;
+  border-radius:24px;
+  padding:35px;
+  text-align:center;
+  font-size:2rem;
+  box-shadow:
+  0 10px 30px rgba(0,0,0,.06);
+  transition:.3s;
+}
+
+.card:hover{
+  transform:translateY(-8px);
+}
+
+.card h3{
+  font-size:22px;
+  margin-top:15px;
+}
+
+.card p{
+  margin-top:10px;
+  color:#666;
+  font-size:15px;
+}
+
+@media(max-width:900px){
+
+  .menu-btn{
+    display:block;
+  }
+
+  .menu{
+    position:absolute;
+    top:75px;
+    right:20px;
+    background:white;
+    flex-direction:column;
+    width:260px;
+    padding:20px;
+    border-radius:16px;
+    display:none;
+    box-shadow:
+    0 10px 30px rgba(0,0,0,.1);
+  }
+
+  .menu.active{
+    display:flex;
+  }
+
+  .hero h1{
+    font-size:2.5rem;
+  }
+
+  .hero-buttons{
+    flex-direction:column;
+  }
+}
