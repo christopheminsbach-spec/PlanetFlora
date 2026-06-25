@@ -5,7 +5,7 @@ import {
   Navigate,
   Route,
   Routes,
-  useLocation,
+  useNavigate,
 } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
@@ -15,109 +15,143 @@ import Analytics from "./pages/Analytics";
 import Map from "./pages/Map";
 import Login from "./pages/Login";
 
-import "./App.css";
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("planet_flora_token");
 
-const API_URL = "http://localhost:3000";
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
 
 const links = [
-  { to: "/home", label: "Dashboard", icon: "🏠" },
-  { to: "/upload", label: "Identifier une plante", icon: "📷" },
-  { to: "/history", label: "Historique", icon: "🕒" },
-  { to: "/analytics", label: "Statistiques", icon: "📊" },
-  { to: "/map", label: "Carte", icon: "🗺️" },
-  { to: "/login", label: "Connexion", icon: "👤" },
+  { to: "/home", label: "🏠 Dashboard" },
+  { to: "/upload", label: "📤 Identifier une plante" },
+  { to: "/history", label: "🕘 Historique" },
+  { to: "/analytics", label: "📊 Statistiques" },
+  { to: "/map", label: "🗺️ Carte" },
 ];
 
 function Layout() {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const location = useLocation();
 
-  const currentPage =
-    links.find((link) => link.to === location.pathname)?.label ||
-    "Planet Flora";
+  const user = JSON.parse(
+    localStorage.getItem("planet_flora_user") || "null"
+  );
 
-  const closeMenu = () => setMenuOpen(false);
+  const logout = () => {
+    localStorage.removeItem("planet_flora_token");
+    localStorage.removeItem("planet_flora_user");
+    navigate("/login");
+  };
 
   return (
-    <div className="app-layout">
-      {/* Overlay sombre derrière le menu mobile */}
-      {menuOpen && (
+    <div style={{ minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
+      <header style={styles.mobileHeader}>
+        <strong>🌿 Planet Flora</strong>
         <button
-          className="menu-overlay"
-          onClick={closeMenu}
-          aria-label="Fermer le menu"
-        />
-      )}
+          onClick={() => setMenuOpen(!menuOpen)}
+          style={styles.hamburger}
+          aria-label="Ouvrir le menu"
+        >
+          ☰
+        </button>
+      </header>
 
-      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
-        <div className="sidebar-logo">
-          <div className="logo-icon">🌿</div>
+      <div style={{ display: "flex", minHeight: "100vh" }}>
+        <aside
+          style={{
+            ...styles.sidebar,
+            ...(menuOpen ? styles.sidebarOpen : {}),
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>🌿 Planet Flora</h2>
 
-          <div>
-            <h1>Planet Flora</h1>
-            <p>Mon jardin numérique</p>
-          </div>
+          {user && (
+            <div style={styles.userBox}>
+              <strong>{user.name}</strong>
+              <small>{user.email}</small>
+            </div>
+          )}
 
-          <button
-            className="close-menu"
-            onClick={closeMenu}
-            aria-label="Fermer le menu"
-          >
-            ×
+          <nav style={{ display: "grid", gap: 8 }}>
+            {links.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                onClick={() => setMenuOpen(false)}
+                style={({ isActive }) => ({
+                  color: "white",
+                  textDecoration: "none",
+                  padding: "11px 12px",
+                  borderRadius: 10,
+                  background: isActive
+                    ? "rgba(255,255,255,0.20)"
+                    : "transparent",
+                })}
+              >
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          <button onClick={logout} style={styles.logout}>
+            Se déconnecter
           </button>
-        </div>
+        </aside>
 
-        <nav className="sidebar-nav">
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              onClick={closeMenu}
-              className={({ isActive }) =>
-                `sidebar-link ${isActive ? "sidebar-link-active" : ""}`
-              }
-            >
-              <span>{link.icon}</span>
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          🌱 Explorez, identifiez et protégez la biodiversité.
-        </div>
-      </aside>
-
-      <div className="app-content">
-        <header className="top-header">
-          {/* Bouton hamburger : visible uniquement téléphone */}
-          <button
-            className="hamburger-button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Ouvrir le menu"
-          >
-            <span />
-            <span />
-            <span />
-          </button>
-
-          <div className="page-heading">
-            <p>PLANET FLORA</p>
-            <h2>{currentPage}</h2>
-          </div>
-
-          <div className="header-plant">🌱</div>
-        </header>
-
-        <main className="main-content">
+        <main style={styles.main}>
           <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<Dashboard apiUrl={API_URL} />} />
-            <Route path="/upload" element={<Upload apiUrl={API_URL} />} />
-            <Route path="/history" element={<History apiUrl={API_URL} />} />
-            <Route path="/analytics" element={<Analytics apiUrl={API_URL} />} />
-            <Route path="/map" element={<Map apiUrl={API_URL} />} />
-            <Route path="/login" element={<Login apiUrl={API_URL} />} />
+
+            <Route
+              path="/home"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/upload"
+              element={
+                <ProtectedRoute>
+                  <Upload />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <History />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Analytics />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/map"
+              element={
+                <ProtectedRoute>
+                  <Map />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
         </main>
@@ -133,3 +167,57 @@ export default function App() {
     </BrowserRouter>
   );
 }
+
+const styles = {
+  sidebar: {
+    width: 250,
+    flexShrink: 0,
+    background: "#1b5e20",
+    color: "white",
+    padding: 20,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 18,
+  },
+  sidebarOpen: {
+    display: "flex",
+  },
+  userBox: {
+    display: "grid",
+    gap: 5,
+    padding: 12,
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.12)",
+  },
+  logout: {
+    marginTop: "auto",
+    border: "1px solid rgba(255,255,255,0.4)",
+    background: "transparent",
+    color: "white",
+    padding: 11,
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
+    padding: 24,
+    background: "#f5f7f5",
+  },
+  mobileHeader: {
+    display: "none",
+    justifyContent: "space-between",
+    alignItems: "center",
+    background: "#1b5e20",
+    color: "white",
+    padding: "14px 16px",
+  },
+  hamburger: {
+    border: "none",
+    background: "transparent",
+    color: "white",
+    fontSize: 26,
+    cursor: "pointer",
+  },
+};
