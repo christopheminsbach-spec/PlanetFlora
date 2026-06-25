@@ -1,5 +1,25 @@
 [
   {
+    "id": "1782403641521",
+    "name": "Strawberry clover",
+    "species": "Trifolium fragiferum",
+    "confidence": 97.5,
+    "family": "Fabaceae",
+    "genus": "Trifolium",
+    "imageUrl": "/uploads/1782403640913-959677.jpg",
+    "createdAt": "2026-06-25T16:07:21.521Z"
+  },
+  {
+    "id": "1782398476678",
+    "name": "Strawberry clover",
+    "species": "Trifolium fragiferum",
+    "confidence": 97.5,
+    "family": "Fabaceae",
+    "genus": "Trifolium",
+    "imageUrl": "/uploads/1782398476076-365370.jpg",
+    "createdAt": "2026-06-25T14:41:16.678Z"
+  },
+  {
     "id": "1782389012573",
     "name": "Asiatic witchweed",
     "species": "Striga asiatica",

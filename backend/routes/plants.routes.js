@@ -5,6 +5,7 @@ import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import pool from "../config/db.js";
 
 const router = express.Router();
 
@@ -18,31 +19,25 @@ if (!fs.existsSync(uploadDirectory)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, callback) => {
-    callback(null, uploadDirectory);
-  },
-
-  filename: (req, file, callback) => {
-    const extension = path.extname(file.originalname) || ".jpg";
-    const safeName = `${Date.now()}-${Math.round(Math.random() * 1_000_000)}${extension}`;
-    callback(null, safeName);
+  destination: (_req, _file, callback) => callback(null, uploadDirectory),
+  filename: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const filename = `${Date.now()}-${Math.round(Math.random() * 1_000_000)}${extension}`;
+    callback(null, filename);
   },
 });
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-  fileFilter: (req, file, callback) => {
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
     if (!allowedTypes.includes(file.mimetype)) {
-      callback(new Error("Format invalide. Utilise JPG, PNG ou WEBP."));
-      return;
+      return callback(new Error("Format invalide. Utilise JPG, PNG ou WEBP."));
     }
 
-    callback(null, true);
+    return callback(null, true);
   },
 });
 
@@ -50,7 +45,7 @@ function getPlantNetUrl() {
   const apiKey = process.env.PLANTNET_API_KEY;
 
   if (!apiKey) {
-    throw new Error("PLANTNET_API_KEY est absent du fichier .env");
+    throw new Error("PLANTNET_API_KEY est absent du fichier backend/.env");
   }
 
   return `https://my-api.plantnet.org/v2/identify/all?api-key=${apiKey}`;
@@ -62,46 +57,57 @@ function normalizeResults(plantNetData) {
     : [];
 
   return rawResults.slice(0, 5).map((item, index) => {
-    const scientificName =
+    const species =
       item?.species?.scientificNameWithoutAuthor ||
       item?.species?.scientificName ||
       "Espèce inconnue";
 
-    const commonName =
-      item?.species?.commonNames?.[0] ||
-      scientificName;
-
-    const confidence = Math.round(Number(item?.score || 0) * 1000) / 10;
+    const name = item?.species?.commonNames?.[0] || species;
 
     return {
-      id: `${Date.now()}-${index}`,
-      name: commonName,
-      species: scientificName,
-      confidence,
+      id: `result-${Date.now()}-${index}`,
+      name,
+      species,
+      confidence: Math.round(Number(item?.score || 0) * 1000) / 10,
       family: item?.species?.family?.scientificNameWithoutAuthor || "",
       genus: item?.species?.genus?.scientificNameWithoutAuthor || "",
     };
   });
 }
 
-/*
-  GET /plants
-  Retourne l'historique en mémoire si aucune base n'est encore connectée.
-*/
-router.get("/", async (req, res) => {
+function optionalNumber(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+/**
+ * GET /plants
+ * Liste les identifications enregistrées.
+ */
+router.get("/", async (_req, res) => {
   try {
-    const historyFile = path.join(__dirname, "..", "data", "plants.json");
+    const [rows] = await pool.execute(`
+      SELECT
+        id,
+        user_id,
+        name,
+        species,
+        confidence,
+        image_url AS imageUrl,
+        latitude,
+        longitude,
+        created_at AS createdAt
+      FROM plant_identifications
+      ORDER BY created_at DESC
+    `);
 
-    if (!fs.existsSync(historyFile)) {
-      return res.json([]);
-    }
-
-    const content = fs.readFileSync(historyFile, "utf-8");
-    const plants = JSON.parse(content || "[]");
-
-    return res.json(Array.isArray(plants) ? plants : []);
+    return res.json(rows);
   } catch (error) {
-    console.error("GET /plants error:", error);
+    console.error("GET /plants:", error.message);
 
     return res.status(500).json({
       message: "Impossible de charger l'historique des plantes.",
@@ -109,10 +115,49 @@ router.get("/", async (req, res) => {
   }
 });
 
-/*
-  POST /plants/identify
-  Attend le champ multipart "image".
-*/
+/**
+ * DELETE /plants/:id
+ * Supprime une identification.
+ */
+router.delete("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({
+      message: "Identifiant de plante invalide.",
+    });
+  }
+
+  try {
+    const [result] = await pool.execute(
+      "DELETE FROM plant_identifications WHERE id = ?",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        message: "Identification introuvable.",
+      });
+    }
+
+    return res.json({
+      message: "Identification supprimée.",
+      id,
+    });
+  } catch (error) {
+    console.error("DELETE /plants/:id:", error.message);
+
+    return res.status(500).json({
+      message: "Impossible de supprimer cette identification.",
+    });
+  }
+});
+
+/**
+ * POST /plants/identify
+ * Champ multipart requis : image
+ * Champs optionnels : latitude, longitude
+ */
 router.post("/identify", (req, res) => {
   upload.single("image")(req, res, async (uploadError) => {
     if (uploadError) {
@@ -130,14 +175,10 @@ router.post("/identify", (req, res) => {
     try {
       const plantNetFormData = new FormData();
 
-      plantNetFormData.append(
-        "images",
-        fs.createReadStream(req.file.path),
-        {
-          filename: req.file.originalname,
-          contentType: req.file.mimetype,
-        }
-      );
+      plantNetFormData.append("images", fs.createReadStream(req.file.path), {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype,
+      });
 
       plantNetFormData.append("organs", "auto");
 
@@ -145,9 +186,7 @@ router.post("/identify", (req, res) => {
         getPlantNetUrl(),
         plantNetFormData,
         {
-          headers: {
-            ...plantNetFormData.getHeaders(),
-          },
+          headers: plantNetFormData.getHeaders(),
           timeout: 45_000,
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
@@ -159,52 +198,53 @@ router.post("/identify", (req, res) => {
       if (results.length === 0) {
         return res.status(404).json({
           message:
-            "Aucune plante n'a été reconnue. Essaie une photo plus nette, avec une feuille ou une fleur bien visible.",
+            "Aucune plante reconnue. Utilise une photo plus nette d’une feuille, fleur ou plante entière.",
         });
       }
 
-      const firstResult = results[0];
+      const bestPlant = results[0];
+      const imageUrl = `/uploads/${req.file.filename}`;
+      const latitude = optionalNumber(req.body.latitude);
+      const longitude = optionalNumber(req.body.longitude);
 
-      const plantToSave = {
-        id: `${Date.now()}`,
-        name: firstResult.name,
-        species: firstResult.species,
-        confidence: firstResult.confidence,
-        family: firstResult.family,
-        genus: firstResult.genus,
-        imageUrl: `/uploads/${req.file.filename}`,
-        createdAt: new Date().toISOString(),
-      };
+      // Fonctionne avec ou sans connexion : user_id reste NULL sans utilisateur.
+      const userId = req.user?.id ?? null;
 
-      const dataDirectory = path.join(__dirname, "..", "data");
-      const historyFile = path.join(dataDirectory, "plants.json");
-
-      if (!fs.existsSync(dataDirectory)) {
-        fs.mkdirSync(dataDirectory, { recursive: true });
-      }
-
-      let existingPlants = [];
-
-      if (fs.existsSync(historyFile)) {
-        try {
-          existingPlants = JSON.parse(fs.readFileSync(historyFile, "utf-8"));
-        } catch {
-          existingPlants = [];
-        }
-      }
-
-      existingPlants.unshift(plantToSave);
-
-      fs.writeFileSync(
-        historyFile,
-        JSON.stringify(existingPlants, null, 2),
-        "utf-8"
+      const [insertResult] = await pool.execute(
+        `INSERT INTO plant_identifications
+          (user_id, name, species, confidence, image_url, latitude, longitude)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          bestPlant.name,
+          bestPlant.species,
+          bestPlant.confidence,
+          imageUrl,
+          latitude,
+          longitude,
+        ]
       );
 
-      return res.status(200).json({
-        message: "Identification terminée.",
+      const [savedRows] = await pool.execute(
+        `SELECT
+          id,
+          user_id,
+          name,
+          species,
+          confidence,
+          image_url AS imageUrl,
+          latitude,
+          longitude,
+          created_at AS createdAt
+        FROM plant_identifications
+        WHERE id = ?`,
+        [insertResult.insertId]
+      );
+
+      return res.status(201).json({
+        message: "Identification terminée et enregistrée.",
         results,
-        savedPlant: plantToSave,
+        savedPlant: savedRows[0],
       });
     } catch (error) {
       console.error("POST /plants/identify:", {
@@ -214,7 +254,7 @@ router.post("/identify", (req, res) => {
       });
 
       if (error.response?.status === 401 || error.response?.status === 403) {
-        return res.status(500).json({
+        return res.status(502).json({
           message:
             "La clé Pl@ntNet est invalide ou refusée. Vérifie PLANTNET_API_KEY dans backend/.env.",
         });
@@ -231,13 +271,12 @@ router.post("/identify", (req, res) => {
       if (error.code === "ECONNABORTED") {
         return res.status(504).json({
           message:
-            "L'analyse a pris trop de temps. Réessaie avec une image plus légère.",
+            "L’analyse a pris trop de temps. Essaie une image plus légère.",
         });
       }
 
       return res.status(500).json({
-        message:
-          "Erreur pendant l'identification de la plante. Consulte le terminal backend pour voir le détail.",
+        message: "Erreur pendant l’identification de la plante.",
       });
     }
   });

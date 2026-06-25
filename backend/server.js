@@ -12,6 +12,8 @@ app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
 
+
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
