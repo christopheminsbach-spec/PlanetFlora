@@ -3,11 +3,14 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const databaseUrl = new URL(process.env.DATABASE_URL);
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "ServBay.dev",
-  database: process.env.DB_NAME || "planet_flora",
+  host: databaseUrl.hostname,
+  port: Number(databaseUrl.port || 3306),
+  user: decodeURIComponent(databaseUrl.username),
+  password: decodeURIComponent(databaseUrl.password),
+  database: databaseUrl.pathname.replace("/", ""),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

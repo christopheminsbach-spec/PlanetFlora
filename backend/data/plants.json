@@ -1,5 +1,55 @@
 [
   {
+    "id": "1782389012573",
+    "name": "Asiatic witchweed",
+    "species": "Striga asiatica",
+    "confidence": 87.8,
+    "family": "Orobanchaceae",
+    "genus": "Striga",
+    "imageUrl": "/uploads/1782389011925-924899.jpg",
+    "createdAt": "2026-06-25T12:03:32.573Z"
+  },
+  {
+    "id": "1782381426870",
+    "name": "Ivy geranium",
+    "species": "Pelargonium peltatum",
+    "confidence": 50.9,
+    "family": "Geraniaceae",
+    "genus": "Pelargonium",
+    "imageUrl": "/uploads/1782381426341-540395.jpg",
+    "createdAt": "2026-06-25T09:57:06.870Z"
+  },
+  {
+    "id": "1782381392725",
+    "name": "Strawberry clover",
+    "species": "Trifolium fragiferum",
+    "confidence": 97.5,
+    "family": "Fabaceae",
+    "genus": "Trifolium",
+    "imageUrl": "/uploads/1782381392121-414643.jpg",
+    "createdAt": "2026-06-25T09:56:32.725Z"
+  },
+  {
+    "id": "1782381374084",
+    "name": "Blue Water Lily",
+    "species": "Nymphaea nouchali",
+    "confidence": 91.9,
+    "family": "Nymphaeaceae",
+    "genus": "Nymphaea",
+    "imageUrl": "/uploads/1782381373539-619393.jpg",
+    "createdAt": "2026-06-25T09:56:14.084Z"
+  },
+  {
+    "id": "1782381352840",
+    "name": "Blue Water Lily",
+    "species": "Nymphaea nouchali",
+    "confidence": 88.1,
+    "family": "Nymphaeaceae",
+    "genus": "Nymphaea",
+    "imageUrl": "/uploads/1782381352269-615904.jpg",
+    "createdAt": "2026-06-25T09:55:52.840Z"
+  },
+  {
     "id": "1782381056812",
     "name": "Ivy geranium",
     "species": "Pelargonium peltatum",

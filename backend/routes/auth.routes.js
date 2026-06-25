@@ -1,65 +1,89 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import pool from "../config/db.js";
 
 const router = express.Router();
 
-const users = []; // Démo temporaire : remplacera MySQL ensuite
-const JWT_SECRET = process.env.JWT_SECRET || "planet_flora_secret_dev";
+const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret-in-production";
+const JWT_EXPIRES_IN = "7d";
+
+function createToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
 
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({
-        message: "Nom, email et mot de passe obligatoires.",
+        message: "Nom, email et mot de passe sont obligatoires.",
       });
     }
 
-    const existingUser = users.find(
-      (user) => user.email.toLowerCase() === email.toLowerCase()
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Le mot de passe doit contenir au moins 6 caractères.",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    // username est généré depuis le nom + une partie unique.
+    const username = `${cleanName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 20)}${Date.now().toString().slice(-6)}`;
+
+    const [existingUsers] = await pool.execute(
+      "SELECT id FROM users WHERE email = ? LIMIT 1",
+      [normalizedEmail]
     );
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       return res.status(409).json({
-        message: "Cet email est déjà utilisé.",
+        message: "Un compte existe déjà avec cet email.",
       });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const [result] = await pool.execute(
+      `INSERT INTO users (name, username, email, password_hash)
+       VALUES (?, ?, ?, ?)`,
+      [cleanName, username, normalizedEmail, passwordHash]
+    );
 
     const user = {
-      id: Date.now(),
-      name,
-      email: email.toLowerCase(),
-      passwordHash,
+      id: result.insertId,
+      name: cleanName,
+      username,
+      email: normalizedEmail,
     };
 
-    users.push(user);
+    const token = createToken(user);
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.status(201).json({
+    return res.status(201).json({
       message: "Compte créé avec succès.",
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
+      user,
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Erreur lors de l'inscription.",
+    console.error("POST /auth/register:", error);
+
+    return res.status(500).json({
+      message: "Impossible de créer le compte.",
     });
   }
 });
@@ -68,52 +92,60 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email?.trim() || !password) {
       return res.status(400).json({
         message: "Email et mot de passe obligatoires.",
       });
     }
 
-    const user = users.find(
-      (item) => item.email.toLowerCase() === email.toLowerCase()
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [users] = await pool.execute(
+      `SELECT id, name, username, email, password_hash
+       FROM users
+       WHERE email = ?
+       LIMIT 1`,
+      [normalizedEmail]
     );
 
-    if (!user) {
+    if (users.length === 0) {
       return res.status(401).json({
         message: "Email ou mot de passe incorrect.",
       });
     }
 
-    const passwordOk = await bcrypt.compare(password, user.passwordHash);
+    const dbUser = users[0];
 
-    if (!passwordOk) {
+    const validPassword = await bcrypt.compare(
+      password,
+      dbUser.password_hash
+    );
+
+    if (!validPassword) {
       return res.status(401).json({
         message: "Email ou mot de passe incorrect.",
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const user = {
+      id: dbUser.id,
+      name: dbUser.name,
+      username: dbUser.username,
+      email: dbUser.email,
+    };
 
-    res.json({
+    const token = createToken(user);
+
+    return res.json({
       message: "Connexion réussie.",
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
+      user,
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Erreur lors de la connexion.",
+    console.error("POST /auth/login:", error);
+
+    return res.status(500).json({
+      message: "Impossible de se connecter.",
     });
   }
 });
