@@ -1,19 +1,28 @@
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
 
-module.exports = function (req, res, next) {
-  const header = req.headers.authorization;
+export default function authMiddleware(req, res, next) {
+  const authorization = req.headers.authorization;
 
-  if (!header) {
-    return res.status(401).json({ message: "Token manquant" });
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return res.status(401).json({
+      message: "Token manquant",
+    });
   }
 
-  const token = header.split(" ")[1];
+  const token = authorization.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "planet_flora_secret"
+    );
+
     req.user = decoded;
+
     next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token invalide" });
+  } catch (error) {
+    return res.status(401).json({
+      message: "Bad token",
+    });
   }
-};
+}

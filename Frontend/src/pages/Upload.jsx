@@ -1,210 +1,201 @@
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import api from "../api";
 
-function normalizePredictions(data) {
-  const rawResults =
-    data?.results ||
-    data?.predictions ||
-    data?.data?.results ||
-    data?.data?.predictions ||
-    [];
-
-  if (!Array.isArray(rawResults)) return [];
-
-  return rawResults.map((item, index) => {
-    const species =
-      item.species ||
-      item.scientificName ||
-      item.scientific_name ||
-      item.name ||
-      item?.species?.scientificName ||
-      item?.species?.scientific_name ||
-      "Espèce inconnue";
-
-    const commonName =
-      item.commonName ||
-      item.common_name ||
-      item?.species?.commonNames?.[0] ||
-      item?.species?.common_name ||
-      "Nom commun non disponible";
-
-    const confidenceRaw =
-      item.confidence ??
-      item.score ??
-      item.probability ??
-      item?.score ??
-      0;
-
-    const confidence =
-      confidenceRaw <= 1
-        ? Math.round(confidenceRaw * 100)
-        : Math.round(confidenceRaw);
-
-    const family =
-      item.family ||
-      item?.species?.family?.scientificName ||
-      item?.species?.family ||
-      "Famille non disponible";
-
-    const genus =
-      item.genus ||
-      item?.species?.genus?.scientificName ||
-      item?.species?.genus ||
-      "Genre non disponible";
-
-    return {
-      id: item.id || `${species}-${index}`,
-      rank: index + 1,
-      species,
-      commonName,
-      confidence: Math.max(0, Math.min(confidence, 100)),
-      family,
-      genus,
-      description:
-        item.description ||
-        `Cette proposition est basée sur les éléments visibles dans votre photo.`,
-    };
-  });
+function getErrorMessage(error) {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.details ||
+    error?.message ||
+    "Erreur pendant l'identification de la plante."
+  );
 }
 
-function confidenceLabel(confidence) {
-  if (confidence >= 85) return "Très probable";
-  if (confidence >= 65) return "Probable";
-  if (confidence >= 40) return "À vérifier";
-  return "Peu probable";
-}
+function formatConfidence(value) {
+  const number = Number(value);
 
-function confidenceColor(confidence) {
-  if (confidence >= 85) return "#15803d";
-  if (confidence >= 65) return "#65a30d";
-  if (confidence >= 40) return "#d97706";
-  return "#dc2626";
+  if (Number.isNaN(number)) {
+    return "Non disponible";
+  }
+
+  return `${number.toFixed(1)} %`;
 }
 
 export default function Upload() {
+  const inputRef = useRef(null);
+
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
-  const [predictions, setPredictions] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [results, setResults] = useState([]);
 
-  const bestPrediction = useMemo(() => predictions[0], [predictions]);
-
-  function handleFileChange(event) {
+  const handleFileChange = (event) => {
     const selectedFile = event.target.files?.[0];
 
-    setPredictions([]);
     setError("");
+    setSuccessMessage("");
+    setResults([]);
     setProgress(0);
 
     if (!selectedFile) {
       setFile(null);
-      setPreview("");
+      setPreviewUrl("");
       return;
     }
 
-    if (!selectedFile.type.startsWith("image/")) {
+    const acceptedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!acceptedTypes.includes(selectedFile.type)) {
       setFile(null);
-      setPreview("");
-      setError("Veuillez sélectionner une image (JPG, PNG, WEBP…).");
+      setPreviewUrl("");
+      setError("Choisis une image JPG, PNG ou WEBP.");
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setFile(null);
+      setPreviewUrl("");
+      setError("L'image est trop lourde. Taille maximale : 10 Mo.");
       return;
     }
 
     setFile(selectedFile);
-    setPreview(URL.createObjectURL(selectedFile));
-  }
+    setPreviewUrl(URL.createObjectURL(selectedFile));
+  };
 
-  async function analyzePlant() {
+  const removeFile = () => {
+    setFile(null);
+    setPreviewUrl("");
+    setProgress(0);
+    setError("");
+    setSuccessMessage("");
+    setResults([]);
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  };
+
+  const analyzePlant = async () => {
     if (!file) {
-      setError("Choisissez une photo de plante avant de lancer l’analyse.");
+      setError("Choisis une image avant de lancer l'analyse.");
       return;
     }
 
+    const formData = new FormData();
+    formData.append("image", file);
+
+    setLoading(true);
+    setProgress(0);
+    setError("");
+    setSuccessMessage("");
+    setResults([]);
+
     try {
-      setLoading(true);
-      setProgress(0);
-      setError("");
-      setPredictions([]);
-
-      const formData = new FormData();
-      formData.append("image", file);
-
       const response = await api.post("/plants/identify", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
         onUploadProgress: (event) => {
-          if (!event.total) return;
-          setProgress(Math.round((event.loaded * 100) / event.total));
+          if (!event.total) {
+            return;
+          }
+
+          const percent = Math.round((event.loaded * 100) / event.total);
+          setProgress(percent);
         },
       });
 
-      const formattedPredictions = normalizePredictions(response.data);
+      const receivedResults = Array.isArray(response.data?.results)
+        ? response.data.results
+        : [];
 
-      if (formattedPredictions.length === 0) {
-        setError(
-          "Aucune prédiction reçue. Vérifie que le backend renvoie bien un tableau results."
-        );
-        return;
-      }
-
-      setPredictions(formattedPredictions);
+      setResults(receivedResults);
       setProgress(100);
+
+      if (receivedResults.length > 0) {
+        setSuccessMessage(
+          response.data?.historyWarning ||
+            "Analyse terminée. La prédiction a été ajoutée à l'historique."
+        );
+      } else {
+        setError("Aucun résultat n'a été retourné par l'API.");
+      }
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Analyse impossible. Vérifie que le backend fonctionne sur http://localhost:3000."
-      );
+      console.error("Erreur analyse :", err);
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <section style={styles.page}>
-      <div style={styles.hero}>
+      <div style={styles.header}>
         <div>
-          <p style={styles.badge}>IDENTIFICATION PAR IMAGE</p>
+          <p style={styles.eyebrow}>IDENTIFICATION INTELLIGENTE</p>
           <h1 style={styles.title}>Identifier une plante</h1>
           <p style={styles.subtitle}>
-            Importe une photo. L’API Pl@ntNet proposera les espèces les plus
-            probables avec un niveau de confiance.
+            Importe une photo : l’API Pl@ntNet proposera les espèces les plus
+            probables.
           </p>
         </div>
-
-        <div style={styles.heroIcon}>🔎🌿</div>
       </div>
 
       <div style={styles.grid}>
-        <article style={styles.uploadCard}>
+        <div style={styles.card}>
           <h2 style={styles.cardTitle}>Importer une photo</h2>
           <p style={styles.cardText}>
             Une photo nette de la feuille, fleur ou plante entière améliore le
             résultat.
           </p>
 
-          <label style={styles.fileZone}>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
+          <input
+            ref={inputRef}
+            id="plant-image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+            disabled={loading}
+          />
 
-            <span style={{ fontSize: 42 }}>📷</span>
-            <strong>Choisir une image</strong>
-            <span style={styles.fileHint}>JPG, PNG, WEBP</span>
+          <label htmlFor="plant-image" style={styles.fileButton}>
+            📷 Choisir une image
           </label>
 
+          <p style={styles.fileHelp}>JPG, PNG, WEBP — maximum 10 Mo</p>
+
           {file && (
-            <div style={styles.selectedFile}>
-              <span>📎</span>
-              <span>{file.name}</span>
-              <span style={styles.fileSize}>
-                {(file.size / 1024 / 1024).toFixed(2)} Mo
-              </span>
+            <div style={styles.fileInfo}>
+              <div>
+                <strong>📎 {file.name}</strong>
+                <p style={styles.fileSize}>
+                  {(file.size / 1024 / 1024).toFixed(2)} Mo
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={removeFile}
+                disabled={loading}
+                style={styles.removeButton}
+              >
+                Supprimer
+              </button>
+            </div>
+          )}
+
+          {previewUrl && (
+            <div style={styles.previewBox}>
+              <img
+                src={previewUrl}
+                alt="Aperçu de la plante sélectionnée"
+                style={styles.previewImage}
+              />
+              <p style={styles.previewLabel}>Aperçu de la plante</p>
             </div>
           )}
 
@@ -222,8 +213,8 @@ export default function Upload() {
           </button>
 
           {loading && (
-            <div style={styles.progressArea}>
-              <div style={styles.progressLabels}>
+            <div style={styles.progressContainer}>
+              <div style={styles.progressTop}>
                 <span>Envoi et analyse de l’image…</span>
                 <strong>{progress}%</strong>
               </div>
@@ -232,7 +223,7 @@ export default function Upload() {
                 <div
                   style={{
                     ...styles.progressBar,
-                    width: `${Math.max(progress, 8)}%`,
+                    width: `${progress}%`,
                   }}
                 />
               </div>
@@ -240,483 +231,309 @@ export default function Upload() {
           )}
 
           {error && <div style={styles.errorBox}>⚠️ {error}</div>}
-        </article>
 
-        <article style={styles.previewCard}>
-          <h2 style={styles.cardTitle}>Aperçu de la plante</h2>
+          {successMessage && (
+            <div style={styles.successBox}>✓ {successMessage}</div>
+          )}
+        </div>
 
-          {preview ? (
-            <img src={preview} alt="Aperçu de la plante" style={styles.image} />
-          ) : (
-            <div style={styles.emptyPreview}>
-              <span style={{ fontSize: 52 }}>🌱</span>
-              <p>Votre image apparaîtra ici.</p>
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>Résultats de l’analyse</h2>
+
+          {results.length === 0 && !loading && (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: 42 }}>🌱</div>
+              <p>
+                Les espèces reconnues apparaîtront ici après l’analyse de
+                l’image.
+              </p>
             </div>
           )}
-        </article>
-      </div>
 
-      {bestPrediction && (
-        <section style={styles.bestCard}>
-          <div style={styles.bestHeader}>
-            <div>
-              <p style={styles.badgeGreen}>MEILLEURE PRÉDICTION</p>
-              <h2 style={styles.bestTitle}>{bestPrediction.species}</h2>
-              <p style={styles.commonName}>{bestPrediction.commonName}</p>
+          {loading && (
+            <div style={styles.emptyState}>
+              <div style={{ fontSize: 42 }}>🔎</div>
+              <p>Recherche des espèces les plus probables…</p>
             </div>
+          )}
 
-            <div
-              style={{
-                ...styles.confidenceCircle,
-                borderColor: confidenceColor(bestPrediction.confidence),
-              }}
-            >
-              <strong>{bestPrediction.confidence}%</strong>
-              <span>confiance</span>
-            </div>
-          </div>
+          {results.length > 0 && (
+            <div style={styles.resultsList}>
+              {results.map((plant, index) => (
+                <article key={plant.id || `${plant.species}-${index}`} style={styles.resultCard}>
+                  <div style={styles.resultHeader}>
+                    <span style={styles.rank}>#{index + 1}</span>
+                    <span style={styles.confidence}>
+                      {formatConfidence(plant.confidence)}
+                    </span>
+                  </div>
 
-          <div style={styles.detailsGrid}>
-            <div style={styles.detailItem}>
-              <span>🌿 Genre</span>
-              <strong>{bestPrediction.genus}</strong>
-            </div>
+                  <h3 style={styles.plantName}>
+                    {plant.name || "Plante inconnue"}
+                  </h3>
 
-            <div style={styles.detailItem}>
-              <span>🧬 Famille</span>
-              <strong>{bestPrediction.family}</strong>
-            </div>
+                  <p style={styles.species}>
+                    {plant.species || "Espèce inconnue"}
+                  </p>
 
-            <div style={styles.detailItem}>
-              <span>🎯 Fiabilité</span>
-              <strong>{confidenceLabel(bestPrediction.confidence)}</strong>
-            </div>
-          </div>
-
-          <p style={styles.description}>{bestPrediction.description}</p>
-        </section>
-      )}
-
-      {predictions.length > 0 && (
-        <section style={styles.resultsSection}>
-          <div style={styles.resultsHeader}>
-            <div>
-              <p style={styles.badgeGreen}>RÉSULTATS</p>
-              <h2 style={styles.resultsTitle}>Espèces proposées</h2>
-            </div>
-
-            <span style={styles.resultsCount}>
-              {predictions.length} proposition(s)
-            </span>
-          </div>
-
-          <div style={styles.predictionsList}>
-            {predictions.map((prediction) => (
-              <article key={prediction.id} style={styles.predictionCard}>
-                <div style={styles.rank}>{prediction.rank}</div>
-
-                <div style={{ flex: 1 }}>
-                  <div style={styles.predictionTop}>
-                    <div>
-                      <h3 style={styles.predictionName}>
-                        {prediction.species}
-                      </h3>
-                      <p style={styles.predictionCommon}>
-                        {prediction.commonName}
-                      </p>
+                  {(plant.family || plant.genus) && (
+                    <div style={styles.taxonomy}>
+                      {plant.family && <span>Famille : {plant.family}</span>}
+                      {plant.genus && <span>Genre : {plant.genus}</span>}
                     </div>
-
-                    <span
-                      style={{
-                        ...styles.confidenceTag,
-                        color: confidenceColor(prediction.confidence),
-                        background: `${confidenceColor(prediction.confidence)}18`,
-                      }}
-                    >
-                      {prediction.confidence}% —{" "}
-                      {confidenceLabel(prediction.confidence)}
-                    </span>
-                  </div>
-
-                  <div style={styles.meterTrack}>
-                    <div
-                      style={{
-                        ...styles.meterBar,
-                        width: `${prediction.confidence}%`,
-                        background: confidenceColor(prediction.confidence),
-                      }}
-                    />
-                  </div>
-
-                  <div style={styles.metaRow}>
-                    <span>
-                      <strong>Genre :</strong> {prediction.genus}
-                    </span>
-                    <span>
-                      <strong>Famille :</strong> {prediction.family}
-                    </span>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
 
 const styles = {
   page: {
-    maxWidth: 1250,
+    maxWidth: 1200,
     margin: "0 auto",
   },
 
-  hero: {
-    padding: 32,
-    borderRadius: 22,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 20,
-    color: "white",
-    background: "linear-gradient(135deg, #14532d, #15803d)",
-    boxShadow: "0 15px 35px rgba(20, 83, 45, 0.2)",
+  header: {
+    marginBottom: 24,
   },
 
-  badge: {
+  eyebrow: {
     margin: 0,
-    fontSize: 11,
-    fontWeight: 800,
-    letterSpacing: 1.2,
-    color: "#dcfce7",
-  },
-
-  badgeGreen: {
-    margin: 0,
-    color: "#16a34a",
-    fontSize: 11,
-    fontWeight: 800,
+    color: "#2e7d32",
+    fontWeight: 700,
+    fontSize: 12,
     letterSpacing: 1.2,
   },
 
   title: {
-    margin: "10px 0",
-    fontSize: "clamp(30px, 5vw, 44px)",
+    margin: "8px 0",
+    fontSize: 34,
+    color: "#16351b",
   },
 
   subtitle: {
-    maxWidth: 680,
     margin: 0,
-    lineHeight: 1.6,
-    color: "rgba(255,255,255,0.85)",
-  },
-
-  heroIcon: {
-    fontSize: 60,
-    minWidth: 110,
-    textAlign: "center",
+    color: "#526457",
+    fontSize: 16,
+    lineHeight: 1.5,
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 1fr) minmax(280px, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
     gap: 20,
-    marginTop: 22,
+    alignItems: "start",
   },
 
-  uploadCard: {
-    padding: 25,
-    borderRadius: 18,
+  card: {
     background: "white",
-    boxShadow: "0 6px 18px rgba(0,0,0,0.07)",
-  },
-
-  previewCard: {
-    padding: 25,
     borderRadius: 18,
-    background: "white",
-    boxShadow: "0 6px 18px rgba(0,0,0,0.07)",
+    padding: 24,
+    boxShadow: "0 8px 30px rgba(23, 53, 27, 0.08)",
+    border: "1px solid #e4eee5",
   },
 
   cardTitle: {
-    margin: 0,
-    color: "#163020",
-    fontSize: 22,
+    margin: "0 0 8px",
+    color: "#16351b",
+    fontSize: 21,
   },
 
   cardText: {
-    color: "#64748b",
-    lineHeight: 1.55,
+    margin: "0 0 20px",
+    color: "#617064",
+    lineHeight: 1.5,
   },
 
-  fileZone: {
-    minHeight: 180,
-    marginTop: 18,
-    padding: 20,
-    display: "grid",
-    placeItems: "center",
-    gap: 8,
-    textAlign: "center",
-    color: "#166534",
-    border: "2px dashed #86efac",
-    borderRadius: 16,
-    background: "#f0fdf4",
+  fileButton: {
+    display: "inline-block",
+    background: "#e7f5e8",
+    color: "#1b5e20",
+    padding: "12px 16px",
+    borderRadius: 10,
+    fontWeight: 700,
     cursor: "pointer",
   },
 
-  fileHint: {
-    color: "#64748b",
+  fileHelp: {
+    color: "#718074",
     fontSize: 13,
+    margin: "10px 0 16px",
   },
 
-  selectedFile: {
-    marginTop: 14,
-    padding: 12,
+  fileInfo: {
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 10,
-    color: "#334155",
-    background: "#f8fafc",
-    fontSize: 14,
+    gap: 12,
+    padding: 14,
+    background: "#f6faf6",
+    borderRadius: 12,
+    marginBottom: 16,
+    color: "#27452c",
   },
 
   fileSize: {
-    marginLeft: "auto",
-    color: "#64748b",
+    margin: "5px 0 0",
+    color: "#6d7c70",
+    fontSize: 13,
+  },
+
+  removeButton: {
+    border: "none",
+    background: "transparent",
+    color: "#b42318",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  previewBox: {
+    marginBottom: 18,
+    overflow: "hidden",
+    borderRadius: 14,
+    border: "1px solid #e1e9e2",
+    background: "#f7faf7",
+  },
+
+  previewImage: {
+    display: "block",
+    width: "100%",
+    maxHeight: 300,
+    objectFit: "cover",
+  },
+
+  previewLabel: {
+    margin: 0,
+    padding: "10px 12px",
+    color: "#607064",
+    fontSize: 13,
   },
 
   analyzeButton: {
     width: "100%",
-    marginTop: 18,
-    padding: "14px 16px",
     border: "none",
     borderRadius: 11,
+    padding: "14px 18px",
+    background: "#1b5e20",
     color: "white",
-    background: "#15803d",
-    fontSize: 16,
     fontWeight: 800,
+    fontSize: 16,
+    transition: "opacity 0.2s ease",
   },
 
-  progressArea: {
+  progressContainer: {
     marginTop: 18,
   },
 
-  progressLabels: {
+  progressTop: {
     display: "flex",
     justifyContent: "space-between",
+    gap: 12,
+    color: "#49604d",
+    fontSize: 14,
     marginBottom: 8,
-    color: "#475569",
-    fontSize: 13,
   },
 
   progressTrack: {
     height: 10,
+    background: "#e5eee6",
+    borderRadius: 999,
     overflow: "hidden",
-    borderRadius: 99,
-    background: "#e2e8f0",
   },
 
   progressBar: {
     height: "100%",
-    borderRadius: 99,
-    background: "#16a34a",
-    transition: "width 0.25s ease",
+    background: "#2e7d32",
+    borderRadius: 999,
+    transition: "width 0.2s ease",
   },
 
   errorBox: {
     marginTop: 16,
     padding: 13,
     borderRadius: 10,
-    color: "#991b1b",
-    background: "#fef2f2",
-    border: "1px solid #fecaca",
+    background: "#fff1f0",
+    color: "#b42318",
+    lineHeight: 1.45,
   },
 
-  image: {
-    width: "100%",
-    height: 290,
-    objectFit: "cover",
-    borderRadius: 14,
-    marginTop: 18,
+  successBox: {
+    marginTop: 16,
+    padding: 13,
+    borderRadius: 10,
+    background: "#edf8ee",
+    color: "#1b5e20",
+    lineHeight: 1.45,
   },
 
-  emptyPreview: {
-    minHeight: 290,
-    marginTop: 18,
+  emptyState: {
+    minHeight: 220,
     display: "grid",
     placeItems: "center",
     textAlign: "center",
-    color: "#64748b",
+    color: "#6a796d",
+    padding: 20,
+    border: "1px dashed #cbd9cd",
     borderRadius: 14,
-    background: "#f8faf8",
-    border: "1px solid #e5eee5",
+    background: "#fbfdfb",
   },
 
-  bestCard: {
-    marginTop: 22,
-    padding: 28,
-    borderRadius: 20,
-    background: "white",
-    border: "1px solid #bbf7d0",
-    boxShadow: "0 8px 24px rgba(20, 83, 45, 0.09)",
-  },
-
-  bestHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 20,
-  },
-
-  bestTitle: {
-    margin: "8px 0 4px",
-    color: "#14532d",
-    fontSize: 30,
-  },
-
-  commonName: {
-    margin: 0,
-    color: "#64748b",
-    fontSize: 16,
-  },
-
-  confidenceCircle: {
-    width: 105,
-    height: 105,
+  resultsList: {
     display: "grid",
-    placeItems: "center",
-    alignContent: "center",
-    border: "7px solid",
-    borderRadius: "50%",
-    color: "#14532d",
-  },
-
-  detailsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 12,
-    marginTop: 25,
   },
 
-  detailItem: {
-    padding: 14,
-    display: "grid",
-    gap: 6,
-    borderRadius: 12,
-    color: "#475569",
-    background: "#f8fafc",
+  resultCard: {
+    padding: 16,
+    borderRadius: 14,
+    border: "1px solid #e1ebe2",
+    background: "#fbfdfb",
   },
 
-  description: {
-    margin: "22px 0 0",
-    color: "#475569",
-    lineHeight: 1.6,
-  },
-
-  resultsSection: {
-    marginTop: 22,
-    padding: 28,
-    borderRadius: 20,
-    background: "white",
-    boxShadow: "0 6px 18px rgba(0,0,0,0.07)",
-  },
-
-  resultsHeader: {
+  resultHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 15,
-    marginBottom: 20,
-  },
-
-  resultsTitle: {
-    margin: "7px 0 0",
-    color: "#163020",
-    fontSize: 26,
-  },
-
-  resultsCount: {
-    padding: "8px 11px",
-    borderRadius: 99,
-    color: "#166534",
-    background: "#dcfce7",
-    fontWeight: 700,
-    fontSize: 13,
-  },
-
-  predictionsList: {
-    display: "grid",
-    gap: 14,
-  },
-
-  predictionCard: {
-    display: "flex",
-    gap: 15,
-    padding: 18,
-    borderRadius: 14,
-    background: "#fafdf9",
-    border: "1px solid #e5eee5",
+    marginBottom: 10,
   },
 
   rank: {
-    minWidth: 34,
-    height: 34,
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "50%",
-    color: "white",
-    background: "#15803d",
+    color: "#2e7d32",
     fontWeight: 800,
   },
 
-  predictionTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
+  confidence: {
+    background: "#dff3e1",
+    color: "#176b2a",
+    padding: "5px 9px",
+    borderRadius: 999,
+    fontWeight: 800,
+    fontSize: 13,
   },
 
-  predictionName: {
-    margin: 0,
-    color: "#1f2937",
+  plantName: {
+    margin: "0 0 5px",
+    color: "#183b1e",
     fontSize: 18,
   },
 
-  predictionCommon: {
-    margin: "4px 0 0",
-    color: "#64748b",
-    fontSize: 14,
+  species: {
+    margin: 0,
+    color: "#536657",
+    fontStyle: "italic",
   },
 
-  confidenceTag: {
-    height: "fit-content",
-    padding: "7px 9px",
-    borderRadius: 99,
-    fontWeight: 800,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-  },
-
-  meterTrack: {
-    height: 8,
-    overflow: "hidden",
-    marginTop: 15,
-    borderRadius: 99,
-    background: "#e2e8f0",
-  },
-
-  meterBar: {
-    height: "100%",
-    borderRadius: 99,
-  },
-
-  metaRow: {
+  taxonomy: {
     display: "flex",
     flexWrap: "wrap",
-    gap: 15,
-    marginTop: 13,
-    color: "#64748b",
+    gap: 8,
+    marginTop: 12,
+    color: "#627166",
     fontSize: 13,
   },
 };

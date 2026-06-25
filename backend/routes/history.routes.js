@@ -1,16 +1,34 @@
-const express = require("express");
-const { PrismaClient } = require("@prisma/client");
+import express from "express";
+import pool from "../config/db.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-router.get("/:userId", async (req, res) => {
-  const data = await prisma.prediction.findMany({
-    where: { userId: Number(req.params.userId) },
-    orderBy: { id: "desc" }
-  });
+/*
+  GET /history
+  Retourne les dernières analyses enregistrées.
+*/
+router.get("/", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT
+        id,
+        plant_name AS name,
+        scientific_name AS species,
+        confidence,
+        image_path AS imagePath,
+        created_at AS createdAt
+      FROM history
+      ORDER BY created_at DESC
+    `);
 
-  res.json(data);
+    res.json(rows);
+  } catch (error) {
+    console.error("Erreur GET /history :", error);
+
+    res.status(500).json({
+      message: "Impossible de charger l'historique",
+    });
+  }
 });
 
-module.exports = router;
+export default router;
