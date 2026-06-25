@@ -1,179 +1,237 @@
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
+* {
+  box-sizing: border-box;
 }
 
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;
-  background:#f7f8fa;
-  color:#111;
+body {
+  margin: 0;
+  background: #f4f8f4;
+  font-family: Arial, sans-serif;
 }
 
-.navbar{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  background:white;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:18px 40px;
-  box-shadow:0 2px 20px rgba(0,0,0,.05);
-  z-index:1000;
+.app-layout {
+  min-height: 100vh;
+  background: #f4f8f4;
 }
 
-.logo{
-  font-size:24px;
-  font-weight:700;
+/* MENU GAUCHE — ordinateur */
+.sidebar {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 265px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  color: white;
+  background: linear-gradient(180deg, #14532d, #166534, #0f5132);
+  box-shadow: 4px 0 20px rgba(20, 83, 45, 0.15);
+  transition: transform 0.3s ease;
 }
 
-.menu{
-  display:flex;
-  gap:25px;
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.menu a{
-  text-decoration:none;
-  color:#333;
-  font-weight:500;
+.logo-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  font-size: 24px;
+  background: rgba(255, 255, 255, 0.15);
 }
 
-.menu a:hover{
-  color:#2e7d32;
+.sidebar-logo h1 {
+  margin: 0;
+  font-size: 20px;
 }
 
-.menu-btn{
-  display:none;
-  border:none;
-  background:none;
-  font-size:28px;
-  cursor:pointer;
+.sidebar-logo p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
 }
 
-.hero{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  padding:120px 20px;
-  background:
-  linear-gradient(
-  135deg,
-  #2e7d32,
-  #43a047,
-  #66bb6a
-  );
-  color:white;
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 26px;
 }
 
-.hero-content{
-  max-width:800px;
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: bold;
+  text-decoration: none;
 }
 
-.hero h1{
-  font-size:4rem;
-  margin-bottom:25px;
+.sidebar-link:hover,
+.sidebar-link-active {
+  color: white;
+  background: rgba(255, 255, 255, 0.18);
 }
 
-.hero p{
-  font-size:1.3rem;
-  opacity:.9;
-  margin-bottom:40px;
+.sidebar-footer {
+  margin-top: auto;
+  padding: 15px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.hero-buttons{
-  display:flex;
-  gap:20px;
-  justify-content:center;
+/* CONTENU */
+.app-content {
+  min-height: 100vh;
+  margin-left: 265px;
 }
 
-.primary{
-  background:white;
-  color:#2e7d32;
+.top-header {
+  min-height: 76px;
+  padding: 12px 30px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: white;
+  border-bottom: 1px solid #e7eee7;
 }
 
-.secondary{
-  background:transparent;
-  border:2px solid white;
-  color:white;
+.page-heading p {
+  margin: 0;
+  color: #16a34a;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
 }
 
-.hero button{
-  padding:16px 28px;
-  border:none;
-  border-radius:16px;
-  font-size:16px;
-  cursor:pointer;
+.page-heading h2 {
+  margin: 4px 0 0;
+  color: #163020;
+  font-size: 20px;
 }
 
-.features{
-  max-width:1400px;
-  margin:auto;
-  padding:80px 30px;
-  display:grid;
-  grid-template-columns:
-  repeat(auto-fit,minmax(280px,1fr));
-  gap:30px;
+.header-plant {
+  width: 42px;
+  height: 42px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 21px;
+  background: #dcfce7;
 }
 
-.card{
-  background:white;
-  border-radius:24px;
-  padding:35px;
-  text-align:center;
-  font-size:2rem;
-  box-shadow:
-  0 10px 30px rgba(0,0,0,.06);
-  transition:.3s;
+.main-content {
+  padding: 30px;
 }
 
-.card:hover{
-  transform:translateY(-8px);
+/* Boutons invisibles sur ordinateur */
+.hamburger-button,
+.close-menu,
+.menu-overlay {
+  display: none;
 }
 
-.card h3{
-  font-size:22px;
-  margin-top:15px;
-}
-
-.card p{
-  margin-top:10px;
-  color:#666;
-  font-size:15px;
-}
-
-@media(max-width:900px){
-
-  .menu-btn{
-    display:block;
+/* =========================
+   TÉLÉPHONE ET TABLETTE
+   ========================= */
+@media (max-width: 800px) {
+  .sidebar {
+    width: 280px;
+    transform: translateX(-100%);
   }
 
-  .menu{
-    position:absolute;
-    top:75px;
-    right:20px;
-    background:white;
-    flex-direction:column;
-    width:260px;
-    padding:20px;
-    border-radius:16px;
-    display:none;
-    box-shadow:
-    0 10px 30px rgba(0,0,0,.1);
+  .sidebar.sidebar-open {
+    transform: translateX(0);
   }
 
-  .menu.active{
-    display:flex;
+  .app-content {
+    margin-left: 0;
   }
 
-  .hero h1{
-    font-size:2.5rem;
+  .top-header {
+    padding: 12px 18px;
   }
 
-  .hero-buttons{
-    flex-direction:column;
+  .main-content {
+    padding: 18px;
+  }
+
+  /* Le bouton hamburger devient visible */
+  .hamburger-button {
+    width: 44px;
+    height: 42px;
+    padding: 8px;
+    display: block;
+    border: none;
+    border-radius: 10px;
+    background: #dcfce7;
+    cursor: pointer;
+  }
+
+  .hamburger-button span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    margin: 4px 0;
+    border-radius: 99px;
+    background: #166534;
+  }
+
+  /* Croix pour fermer dans le menu */
+  .close-menu {
+    display: block;
+    margin-left: auto;
+    border: none;
+    color: white;
+    font-size: 30px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  /* Fond sombre cliquable */
+  .menu-overlay {
+    position: fixed;
+    z-index: 40;
+    inset: 0;
+    display: block;
+    border: none;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .page-heading h2 {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-header {
+    min-height: 66px;
+  }
+
+  .header-plant {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .main-content {
+    padding: 14px;
+  }
+
+  .sidebar {
+    width: 86%;
+    max-width: 310px;
   }
 }

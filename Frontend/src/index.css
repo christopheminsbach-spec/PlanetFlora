@@ -43,3 +43,25 @@ a {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+@media (max-width: 800px) {
+  aside {
+    transform: translateX(-100%);
+  }
+
+  aside[style*="translateX(0)"] {
+    transform: translateX(0) !important;
+  }
+
+  main {
+    padding: 18px !important;
+  }
+
+  header {
+    padding: 12px 18px !important;
+  }
+
+  .hamburger {
+    display: block;
+  }
+}

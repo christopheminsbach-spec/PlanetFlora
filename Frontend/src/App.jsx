@@ -1,4 +1,13 @@
-import { BrowserRouter, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { useState } from "react";
+import {
+  BrowserRouter,
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+
 import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
 import History from "./pages/History";
@@ -6,64 +15,113 @@ import Analytics from "./pages/Analytics";
 import Map from "./pages/Map";
 import Login from "./pages/Login";
 
+import "./App.css";
+
 const API_URL = "http://localhost:3000";
 
 const links = [
-  { to: "/home", label: "Dashboard" },
-  { to: "/upload", label: "Upload" },
-  { to: "/history", label: "History" },
-  { to: "/analytics", label: "Analytics" },
-  { to: "/map", label: "Map" },
-  { to: "/login", label: "Login" },
+  { to: "/home", label: "Dashboard", icon: "🏠" },
+  { to: "/upload", label: "Identifier une plante", icon: "📷" },
+  { to: "/history", label: "Historique", icon: "🕒" },
+  { to: "/analytics", label: "Statistiques", icon: "📊" },
+  { to: "/map", label: "Carte", icon: "🗺️" },
+  { to: "/login", label: "Connexion", icon: "👤" },
 ];
 
 function Layout() {
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <aside
-        style={{
-          width: 240,
-          background: "#1b5e20",
-          color: "white",
-          padding: 20,
-          boxSizing: "border-box",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>🌿 Planet Flora</h2>
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
 
-        <nav style={{ display: "grid", gap: 8 }}>
+  const currentPage =
+    links.find((link) => link.to === location.pathname)?.label ||
+    "Planet Flora";
+
+  const closeMenu = () => setMenuOpen(false);
+
+  return (
+    <div className="app-layout">
+      {/* Overlay sombre derrière le menu mobile */}
+      {menuOpen && (
+        <button
+          className="menu-overlay"
+          onClick={closeMenu}
+          aria-label="Fermer le menu"
+        />
+      )}
+
+      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
+        <div className="sidebar-logo">
+          <div className="logo-icon">🌿</div>
+
+          <div>
+            <h1>Planet Flora</h1>
+            <p>Mon jardin numérique</p>
+          </div>
+
+          <button
+            className="close-menu"
+            onClick={closeMenu}
+            aria-label="Fermer le menu"
+          >
+            ×
+          </button>
+        </div>
+
+        <nav className="sidebar-nav">
           {links.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
-              style={({ isActive }) => ({
-                color: "white",
-                textDecoration: "none",
-                padding: "10px 12px",
-                borderRadius: 8,
-                background: isActive ? "rgba(255,255,255,0.20)" : "transparent",
-              })}
+              onClick={closeMenu}
+              className={({ isActive }) =>
+                `sidebar-link ${isActive ? "sidebar-link-active" : ""}`
+              }
             >
+              <span>{link.icon}</span>
               {link.label}
             </NavLink>
           ))}
         </nav>
+
+        <div className="sidebar-footer">
+          🌱 Explorez, identifiez et protégez la biodiversité.
+        </div>
       </aside>
 
-      <main style={{ flex: 1, padding: 24, background: "#f5f7f5" }}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<Dashboard apiUrl={API_URL} />} />
-          <Route path="/upload" element={<Upload apiUrl={API_URL} />} />
-          <Route path="/history" element={<History apiUrl={API_URL} />} />
-          <Route path="/analytics" element={<Analytics apiUrl={API_URL} />} />
-          <Route path="/map" element={<Map apiUrl={API_URL} />} />
-          <Route path="/login" element={<Login apiUrl={API_URL} />} />
+      <div className="app-content">
+        <header className="top-header">
+          {/* Bouton hamburger : visible uniquement téléphone */}
+          <button
+            className="hamburger-button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Ouvrir le menu"
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
-          {/* Toute URL inconnue retourne au dashboard */}
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
-      </main>
+          <div className="page-heading">
+            <p>PLANET FLORA</p>
+            <h2>{currentPage}</h2>
+          </div>
+
+          <div className="header-plant">🌱</div>
+        </header>
+
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/home" element={<Dashboard apiUrl={API_URL} />} />
+            <Route path="/upload" element={<Upload apiUrl={API_URL} />} />
+            <Route path="/history" element={<History apiUrl={API_URL} />} />
+            <Route path="/analytics" element={<Analytics apiUrl={API_URL} />} />
+            <Route path="/map" element={<Map apiUrl={API_URL} />} />
+            <Route path="/login" element={<Login apiUrl={API_URL} />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   );
 }
