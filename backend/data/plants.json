@@ -1,0 +1,22 @@
+[
+  {
+    "id": "1782381056812",
+    "name": "Ivy geranium",
+    "species": "Pelargonium peltatum",
+    "confidence": 22.5,
+    "family": "Geraniaceae",
+    "genus": "Pelargonium",
+    "imageUrl": "/uploads/1782381056312-354615.jpg",
+    "createdAt": "2026-06-25T09:50:56.812Z"
+  },
+  {
+    "id": "1782381023041",
+    "name": "Ivy geranium",
+    "species": "Pelargonium peltatum",
+    "confidence": 96.4,
+    "family": "Geraniaceae",
+    "genus": "Pelargonium",
+    "imageUrl": "/uploads/1782381022577-488334.jpg",
+    "createdAt": "2026-06-25T09:50:23.041Z"
+  }
+]

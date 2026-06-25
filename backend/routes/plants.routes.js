@@ -4,194 +4,243 @@ import axios from "axios";
 import FormData from "form-data";
 import fs from "fs";
 import path from "path";
-import pool from "../config/db.js";
+import { fileURLToPath } from "url";
 
 const router = express.Router();
 
-/* =========================
-   📁 UPLOAD CONFIG
-========================= */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const uploadDir = path.resolve(process.cwd(), "uploads");
+const uploadDirectory = path.join(__dirname, "..", "uploads");
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(uploadDirectory)) {
+  fs.mkdirSync(uploadDirectory, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
+  destination: (req, file, callback) => {
+    callback(null, uploadDirectory);
+  },
 
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || ".jpg");
-    cb(
-      null,
-      `plant-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`
-    );
+  filename: (req, file, callback) => {
+    const extension = path.extname(file.originalname) || ".jpg";
+    const safeName = `${Date.now()}-${Math.round(Math.random() * 1_000_000)}${extension}`;
+    callback(null, safeName);
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Format image uniquement"));
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (req, file, callback) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      callback(new Error("Format invalide. Utilise JPG, PNG ou WEBP."));
+      return;
     }
-    cb(null, true);
+
+    callback(null, true);
   },
 });
 
-/* =========================
-   🌱 GET HISTORY
-========================= */
+function getPlantNetUrl() {
+  const apiKey = process.env.PLANTNET_API_KEY;
 
-router.get("/", async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT
-        id,
-        plant_name AS name,
-        scientific_name AS species,
-        confidence,
-        image_path AS imagePath,
-        created_at AS createdAt
-      FROM history
-      ORDER BY created_at DESC
-    `);
-
-    res.json(rows);
-  } catch (err) {
-    console.error("GET /plants error:", err);
-    res.status(500).json({
-      message: "Erreur chargement historique",
-      details: err.message,
-    });
+  if (!apiKey) {
+    throw new Error("PLANTNET_API_KEY est absent du fichier .env");
   }
-});
 
-/* =========================
-   🗑 DELETE HISTORY ITEM
-========================= */
+  return `https://my-api.plantnet.org/v2/identify/all?api-key=${apiKey}`;
+}
 
-router.delete("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+function normalizeResults(plantNetData) {
+  const rawResults = Array.isArray(plantNetData?.results)
+    ? plantNetData.results
+    : [];
 
-    const [result] = await pool.execute(
-      "DELETE FROM history WHERE id = ?",
-      [id]
-    );
+  return rawResults.slice(0, 5).map((item, index) => {
+    const scientificName =
+      item?.species?.scientificNameWithoutAuthor ||
+      item?.species?.scientificName ||
+      "Espèce inconnue";
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        message: "Analyse introuvable",
-      });
-    }
+    const commonName =
+      item?.species?.commonNames?.[0] ||
+      scientificName;
 
-    res.json({
-      message: "Supprimé avec succès",
-      id,
-    });
-  } catch (err) {
-    console.error("DELETE /plants error:", err);
-
-    res.status(500).json({
-      message: "Erreur suppression",
-      details: err.message,
-    });
-  }
-});
-
-/* =========================
-   🌿 IDENTIFY PLANT
-========================= */
-
-function formatResults(data) {
-  const results = Array.isArray(data?.results) ? data.results : [];
-
-  return results.slice(0, 5).map((item, index) => {
-    const species =
-      item.species?.scientificNameWithoutAuthor ||
-      item.species?.scientificName ||
-      "Unknown";
-
-    const common = item.species?.commonNames || [];
+    const confidence = Math.round(Number(item?.score || 0) * 1000) / 10;
 
     return {
       id: `${Date.now()}-${index}`,
-      name: common[0] || species,
-      species,
-      confidence: Number(((item.score || 0) * 100).toFixed(2)),
-      family: item.species?.family?.scientificNameWithoutAuthor || "",
-      genus: item.species?.genus?.scientificNameWithoutAuthor || "",
+      name: commonName,
+      species: scientificName,
+      confidence,
+      family: item?.species?.family?.scientificNameWithoutAuthor || "",
+      genus: item?.species?.genus?.scientificNameWithoutAuthor || "",
     };
   });
 }
 
-router.post("/identify", upload.single("image"), async (req, res) => {
+/*
+  GET /plants
+  Retourne l'historique en mémoire si aucune base n'est encore connectée.
+*/
+router.get("/", async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: "Image manquante" });
+    const historyFile = path.join(__dirname, "..", "data", "plants.json");
+
+    if (!fs.existsSync(historyFile)) {
+      return res.json([]);
     }
 
-    const apiKey = process.env.PLANTNET_API_KEY;
+    const content = fs.readFileSync(historyFile, "utf-8");
+    const plants = JSON.parse(content || "[]");
 
-    if (!apiKey) {
-      return res.status(500).json({
-        message: "API key manquante",
-      });
-    }
+    return res.json(Array.isArray(plants) ? plants : []);
+  } catch (error) {
+    console.error("GET /plants error:", error);
 
-    const form = new FormData();
-
-    form.append("images", fs.createReadStream(req.file.path));
-    form.append("organs", "auto");
-
-    const response = await axios.post(
-      "https://my-api.plantnet.org/v2/identify/all",
-      form,
-      {
-        params: { "api-key": apiKey, lang: "fr" },
-        headers: form.getHeaders(),
-      }
-    );
-
-    const results = formatResults(response.data);
-
-    if (!results.length) {
-      return res.status(404).json({
-        message: "Aucune plante reconnue",
-      });
-    }
-
-    const best = results[0];
-    const imagePath = `/uploads/${req.file.filename}`;
-
-    const [insert] = await pool.execute(
-      `
-      INSERT INTO history (
-        plant_name,
-        scientific_name,
-        confidence,
-        image_path
-      ) VALUES (?, ?, ?, ?)
-      `,
-      [best.name, best.species, best.confidence, imagePath]
-    );
-
-    res.json({
-      message: "OK",
-      historyId: insert.insertId,
-      results,
-    });
-  } catch (err) {
-    console.error("IDENTIFY ERROR:", err);
-
-    res.status(500).json({
-      message: "Erreur identification",
-      details: err.message,
+    return res.status(500).json({
+      message: "Impossible de charger l'historique des plantes.",
     });
   }
+});
+
+/*
+  POST /plants/identify
+  Attend le champ multipart "image".
+*/
+router.post("/identify", (req, res) => {
+  upload.single("image")(req, res, async (uploadError) => {
+    if (uploadError) {
+      return res.status(400).json({
+        message: uploadError.message || "Erreur lors de l'envoi de l'image.",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Aucune image reçue. Le champ doit s'appeler image.",
+      });
+    }
+
+    try {
+      const plantNetFormData = new FormData();
+
+      plantNetFormData.append(
+        "images",
+        fs.createReadStream(req.file.path),
+        {
+          filename: req.file.originalname,
+          contentType: req.file.mimetype,
+        }
+      );
+
+      plantNetFormData.append("organs", "auto");
+
+      const plantNetResponse = await axios.post(
+        getPlantNetUrl(),
+        plantNetFormData,
+        {
+          headers: {
+            ...plantNetFormData.getHeaders(),
+          },
+          timeout: 45_000,
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        }
+      );
+
+      const results = normalizeResults(plantNetResponse.data);
+
+      if (results.length === 0) {
+        return res.status(404).json({
+          message:
+            "Aucune plante n'a été reconnue. Essaie une photo plus nette, avec une feuille ou une fleur bien visible.",
+        });
+      }
+
+      const firstResult = results[0];
+
+      const plantToSave = {
+        id: `${Date.now()}`,
+        name: firstResult.name,
+        species: firstResult.species,
+        confidence: firstResult.confidence,
+        family: firstResult.family,
+        genus: firstResult.genus,
+        imageUrl: `/uploads/${req.file.filename}`,
+        createdAt: new Date().toISOString(),
+      };
+
+      const dataDirectory = path.join(__dirname, "..", "data");
+      const historyFile = path.join(dataDirectory, "plants.json");
+
+      if (!fs.existsSync(dataDirectory)) {
+        fs.mkdirSync(dataDirectory, { recursive: true });
+      }
+
+      let existingPlants = [];
+
+      if (fs.existsSync(historyFile)) {
+        try {
+          existingPlants = JSON.parse(fs.readFileSync(historyFile, "utf-8"));
+        } catch {
+          existingPlants = [];
+        }
+      }
+
+      existingPlants.unshift(plantToSave);
+
+      fs.writeFileSync(
+        historyFile,
+        JSON.stringify(existingPlants, null, 2),
+        "utf-8"
+      );
+
+      return res.status(200).json({
+        message: "Identification terminée.",
+        results,
+        savedPlant: plantToSave,
+      });
+    } catch (error) {
+      console.error("POST /plants/identify:", {
+        message: error.message,
+        status: error.response?.status,
+        plantNetError: error.response?.data,
+      });
+
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        return res.status(500).json({
+          message:
+            "La clé Pl@ntNet est invalide ou refusée. Vérifie PLANTNET_API_KEY dans backend/.env.",
+        });
+      }
+
+      if (error.response?.status === 400) {
+        return res.status(400).json({
+          message:
+            error.response?.data?.message ||
+            "Pl@ntNet refuse cette image ou les paramètres envoyés.",
+        });
+      }
+
+      if (error.code === "ECONNABORTED") {
+        return res.status(504).json({
+          message:
+            "L'analyse a pris trop de temps. Réessaie avec une image plus légère.",
+        });
+      }
+
+      return res.status(500).json({
+        message:
+          "Erreur pendant l'identification de la plante. Consulte le terminal backend pour voir le détail.",
+      });
+    }
+  });
 });
 
 export default router;
