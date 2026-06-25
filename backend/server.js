@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import plantsRouter from "./routes/plants.routes.js";
 
+
 const app = express();
 
 app.use(cors());

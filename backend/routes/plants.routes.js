@@ -8,68 +8,42 @@ import pool from "../config/db.js";
 
 const router = express.Router();
 
-const uploadDirectory = path.resolve(process.cwd(), "uploads");
+/* =========================
+   📁 UPLOAD CONFIG
+========================= */
 
-if (!fs.existsSync(uploadDirectory)) {
-  fs.mkdirSync(uploadDirectory, { recursive: true });
+const uploadDir = path.resolve(process.cwd(), "uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, callback) => {
-    callback(null, uploadDirectory);
-  },
+  destination: (req, file, cb) => cb(null, uploadDir),
 
-  filename: (req, file, callback) => {
-    const extension = path.extname(file.originalname || ".jpg").toLowerCase();
-    const safeExtension = extension || ".jpg";
-    const fileName = `plant-${Date.now()}-${Math.round(
-      Math.random() * 1_000_000
-    )}${safeExtension}`;
-
-    callback(null, fileName);
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || ".jpg");
+    cb(
+      null,
+      `plant-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`
+    );
   },
 });
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-  fileFilter: (req, file, callback) => {
-    if (!file.mimetype?.startsWith("image/")) {
-      callback(new Error("Le fichier doit être une image JPG, PNG ou WEBP."));
-      return;
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      return cb(new Error("Format image uniquement"));
     }
-
-    callback(null, true);
+    cb(null, true);
   },
 });
 
-function formatPlantNetResults(plantNetData) {
-  const sourceResults = Array.isArray(plantNetData?.results)
-    ? plantNetData.results
-    : [];
-
-  return sourceResults.slice(0, 5).map((item, index) => {
-    const species =
-      item.species?.scientificNameWithoutAuthor ||
-      item.species?.scientificName ||
-      "Espèce inconnue";
-
-    const commonNames = Array.isArray(item.species?.commonNames)
-      ? item.species.commonNames
-      : [];
-
-    return {
-      id: `${Date.now()}-${index}`,
-      name: commonNames[0] || species,
-      species,
-      confidence: Number(((item.score || 0) * 100).toFixed(2)),
-      family: item.species?.family?.scientificNameWithoutAuthor || "",
-      genus: item.species?.genus?.scientificNameWithoutAuthor || "",
-    };
-  });
-}
+/* =========================
+   🌱 GET HISTORY
+========================= */
 
 router.get("/", async (req, res) => {
   try {
@@ -85,158 +59,137 @@ router.get("/", async (req, res) => {
       ORDER BY created_at DESC
     `);
 
-    return res.status(200).json(rows);
-  } catch (error) {
-    console.error("GET /plants :", error);
-
-    return res.status(500).json({
-      message: "Impossible de charger les plantes depuis MySQL.",
-      details: error.message,
+    res.json(rows);
+  } catch (err) {
+    console.error("GET /plants error:", err);
+    res.status(500).json({
+      message: "Erreur chargement historique",
+      details: err.message,
     });
   }
 });
 
-router.post("/identify", (req, res, next) => {
-  upload.single("image")(req, res, (error) => {
-    if (error) {
-      console.error("Erreur upload image :", error.message);
+/* =========================
+   🗑 DELETE HISTORY ITEM
+========================= */
 
-      return res.status(400).json({
-        message: error.message || "Erreur lors de l'envoi de l'image.",
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.execute(
+      "DELETE FROM history WHERE id = ?",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        message: "Analyse introuvable",
       });
     }
 
-    next();
-  });
-}, async (req, res) => {
-  let uploadedFilePath = "";
+    res.json({
+      message: "Supprimé avec succès",
+      id,
+    });
+  } catch (err) {
+    console.error("DELETE /plants error:", err);
 
+    res.status(500).json({
+      message: "Erreur suppression",
+      details: err.message,
+    });
+  }
+});
+
+/* =========================
+   🌿 IDENTIFY PLANT
+========================= */
+
+function formatResults(data) {
+  const results = Array.isArray(data?.results) ? data.results : [];
+
+  return results.slice(0, 5).map((item, index) => {
+    const species =
+      item.species?.scientificNameWithoutAuthor ||
+      item.species?.scientificName ||
+      "Unknown";
+
+    const common = item.species?.commonNames || [];
+
+    return {
+      id: `${Date.now()}-${index}`,
+      name: common[0] || species,
+      species,
+      confidence: Number(((item.score || 0) * 100).toFixed(2)),
+      family: item.species?.family?.scientificNameWithoutAuthor || "",
+      genus: item.species?.genus?.scientificNameWithoutAuthor || "",
+    };
+  });
+}
+
+router.post("/identify", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        message: "Aucune image reçue. Le champ FormData doit s'appeler image.",
-      });
+      return res.status(400).json({ message: "Image manquante" });
     }
 
-    uploadedFilePath = req.file.path;
-
-    const apiKey = process.env.PLANTNET_API_KEY?.trim();
+    const apiKey = process.env.PLANTNET_API_KEY;
 
     if (!apiKey) {
       return res.status(500).json({
-        message: "PLANTNET_API_KEY est absente dans le fichier backend/.env.",
+        message: "API key manquante",
       });
     }
 
     const form = new FormData();
 
-    form.append("images", fs.createReadStream(req.file.path), {
-      filename: req.file.filename,
-      contentType: req.file.mimetype,
-    });
-
+    form.append("images", fs.createReadStream(req.file.path));
     form.append("organs", "auto");
 
-    console.log("Analyse Pl@ntNet en cours :", req.file.filename);
-
-    const plantNetResponse = await axios.post(
+    const response = await axios.post(
       "https://my-api.plantnet.org/v2/identify/all",
       form,
       {
-        params: {
-          "api-key": apiKey,
-          lang: "fr",
-        },
+        params: { "api-key": apiKey, lang: "fr" },
         headers: form.getHeaders(),
-        timeout: 45000,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-        validateStatus: () => true,
       }
     );
 
-    if (plantNetResponse.status < 200 || plantNetResponse.status >= 300) {
-      console.error("Erreur Pl@ntNet :", plantNetResponse.status, plantNetResponse.data);
+    const results = formatResults(response.data);
 
-      return res.status(plantNetResponse.status).json({
-        message: "Pl@ntNet a refusé la demande d'identification.",
-        details:
-          plantNetResponse.data?.message ||
-          plantNetResponse.data?.error ||
-          "Erreur inconnue retournée par Pl@ntNet.",
-      });
-    }
-
-    const results = formatPlantNetResults(plantNetResponse.data);
-
-    if (results.length === 0) {
+    if (!results.length) {
       return res.status(404).json({
-        message: "Aucune espèce n'a été reconnue sur cette image.",
+        message: "Aucune plante reconnue",
       });
     }
 
-    const bestPlant = results[0];
+    const best = results[0];
     const imagePath = `/uploads/${req.file.filename}`;
 
-    let historyId = null;
-    let historyWarning = "";
+    const [insert] = await pool.execute(
+      `
+      INSERT INTO history (
+        plant_name,
+        scientific_name,
+        confidence,
+        image_path
+      ) VALUES (?, ?, ?, ?)
+      `,
+      [best.name, best.species, best.confidence, imagePath]
+    );
 
-    try {
-      const [insertResult] = await pool.execute(
-        `
-          INSERT INTO history (
-            plant_name,
-            scientific_name,
-            confidence,
-            image_path
-          )
-          VALUES (?, ?, ?, ?)
-        `,
-        [
-          bestPlant.name,
-          bestPlant.species,
-          bestPlant.confidence,
-          imagePath,
-        ]
-      );
-
-      historyId = insertResult.insertId;
-      console.log("Historique sauvegardé :", historyId);
-    } catch (databaseError) {
-      console.error("Erreur MySQL history :", databaseError.message);
-
-      historyWarning =
-        "La plante a été identifiée, mais l'historique n'a pas été sauvegardé dans MySQL.";
-    }
-
-    return res.status(200).json({
-      message: "Identification réussie.",
-      historyId,
-      imagePath,
-      historyWarning,
+    res.json({
+      message: "OK",
+      historyId: insert.insertId,
       results,
     });
-  } catch (error) {
-    console.error("POST /plants/identify :", {
-      message: error.message,
-      code: error.code,
-      status: error.response?.status,
-      plantNetError: error.response?.data,
-    });
+  } catch (err) {
+    console.error("IDENTIFY ERROR:", err);
 
-    if (error.code === "ECONNABORTED") {
-      return res.status(504).json({
-        message:
-          "Le délai Pl@ntNet est dépassé. Réessaie avec une autre image.",
-      });
-    }
-
-    return res.status(error.response?.status || 500).json({
-      message: "Erreur pendant l'identification de la plante.",
-      details:
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        error.message,
+    res.status(500).json({
+      message: "Erreur identification",
+      details: err.message,
     });
   }
 });
