@@ -1,74 +1,75 @@
 import { useState } from "react";
 import api from "../api";
-import Loader from "../components/Loader";
-import PlantCard from "../components/PlantCard";
+
+function percent(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
 
 export default function Upload() {
-  const [image, setImage] = useState(null);
+  const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
-  const [plants, setPlants] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState("");
 
   function handleFileChange(event) {
-    const file = event.target.files?.[0];
+    const selectedFile = event.target.files?.[0];
 
+    setFile(selectedFile || null);
+    setResults([]);
+    setAnalysis(null);
     setError("");
-    setPlants([]);
+    setProgress(0);
 
-    if (!file) {
-      setImage(null);
+    if (selectedFile) {
+      setPreview(URL.createObjectURL(selectedFile));
+    } else {
       setPreview("");
-      return;
     }
-
-    if (!file.type.startsWith("image/")) {
-      setError("Choisis une image JPG, PNG ou WEBP.");
-      setImage(null);
-      setPreview("");
-      return;
-    }
-
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (!image) {
-      setError("Sélectionne une photo de plante avant de lancer l'analyse.");
+  async function analyzePlant() {
+    if (!file) {
+      setError("Choisis une image avant de lancer l'analyse.");
       return;
     }
 
-    setLoading(true);
-    setError("");
-    setPlants([]);
+    const formData = new FormData();
+    formData.append("image", file);
 
     try {
-      const formData = new FormData();
-      formData.append("image", image);
+      setLoading(true);
+      setError("");
+      setResults([]);
+      setAnalysis(null);
+      setProgress(0);
 
-      const response = await api.post("/predict", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
-        }
+      const response = await api.post("/plants/identify", formData, {
+        onUploadProgress: (event) => {
+          if (event.total) {
+            setProgress(Math.round((event.loaded * 100) / event.total));
+          }
+        },
       });
 
-      const results =
-        response.data.top5 ||
-        response.data.results ||
-        response.data.predictions ||
-        [];
+      setResults(
+        Array.isArray(response.data.results) ? response.data.results : []
+      );
 
-      setPlants(Array.isArray(results) ? results : []);
+      setAnalysis({
+        imageName: response.data.imageName,
+        analyzedAt: response.data.analyzedAt,
+      });
+
+      setProgress(100);
     } catch (err) {
       console.error(err);
 
       setError(
         err.response?.data?.message ||
-        err.response?.data?.error ||
-        "Impossible d'analyser cette image. Vérifie que le backend est démarré."
+          "Impossible d'analyser l'image. Vérifie que le backend fonctionne sur le port 3000."
       );
     } finally {
       setLoading(false);
@@ -76,70 +77,185 @@ export default function Upload() {
   }
 
   return (
-    <div style={{ maxWidth: 760 }}>
-      <h1>Identifier une plante</h1>
-      <p>Importe une photo : l’API Pl@ntNet proposera les espèces les plus probables.</p>
+    <section style={{ maxWidth: 950 }}>
+      <h1>🌿 Identifier une plante</h1>
+      <p>
+        Importe une photo. Pl@ntNet proposera les espèces les plus probables,
+        avec leur famille, genre et niveau de confiance.
+      </p>
 
-      <form onSubmit={handleSubmit}>
+      <div
+        style={{
+          background: "white",
+          padding: 20,
+          borderRadius: 14,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+        }}
+      >
         <input
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           onChange={handleFileChange}
-          style={{ margin: "16px 0" }}
+          disabled={loading}
         />
 
         {preview && (
-          <img
-            src={preview}
-            alt="Aperçu de la plante"
-            style={{
-              display: "block",
-              width: "100%",
-              maxWidth: 420,
-              maxHeight: 320,
-              objectFit: "cover",
-              borderRadius: 12,
-              marginBottom: 16
-            }}
-          />
+          <div style={{ marginTop: 18 }}>
+            <p style={{ marginBottom: 8 }}>Aperçu de la plante</p>
+            <img
+              src={preview}
+              alt="Aperçu de la plante sélectionnée"
+              style={{
+                width: "100%",
+                maxWidth: 500,
+                maxHeight: 360,
+                objectFit: "cover",
+                borderRadius: 12,
+                border: "1px solid #d1d5db",
+              }}
+            />
+          </div>
         )}
 
         <button
-          type="submit"
-          disabled={loading}
+          type="button"
+          onClick={analyzePlant}
+          disabled={!file || loading}
           style={{
-            padding: "10px 16px",
+            marginTop: 18,
+            padding: "11px 16px",
             border: 0,
             borderRadius: 8,
-            cursor: loading ? "wait" : "pointer",
-            background: "#2e7d32",
-            color: "white"
+            cursor: !file || loading ? "not-allowed" : "pointer",
+            background: "#1b5e20",
+            color: "white",
+            fontWeight: 700,
           }}
         >
-          {loading ? "Analyse en cours..." : "Analyser la plante"}
+          {loading ? "Analyse détaillée en cours..." : "Analyser la plante"}
         </button>
-      </form>
 
-      {loading && <Loader />}
+        {loading && (
+          <div style={{ marginTop: 16, maxWidth: 500 }}>
+            <div
+              style={{
+                height: 10,
+                borderRadius: 99,
+                background: "#e5e7eb",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${progress}%`,
+                  height: "100%",
+                  background: "#1b5e20",
+                  transition: "width 0.2s ease",
+                }}
+              />
+            </div>
+            <p>{progress}% de l’image envoyé</p>
+          </div>
+        )}
 
-      {error && (
-        <p style={{ color: "#b71c1c", marginTop: 16 }}>
-          {error}
+        {error && (
+          <p style={{ color: "#b91c1c", marginTop: 16 }}>
+            {error}
+          </p>
+        )}
+      </div>
+
+      {analysis && (
+        <p style={{ marginTop: 18, color: "#4b5563" }}>
+          Image analysée : <strong>{analysis.imageName}</strong>
+          {analysis.analyzedAt &&
+            ` — ${new Date(analysis.analyzedAt).toLocaleString("fr-FR")}`}
         </p>
       )}
 
-      {plants.length > 0 && (
+      {results.length > 0 && (
         <section style={{ marginTop: 24 }}>
-          <h2>Résultats</h2>
+          <h2>Résultats les plus probables</h2>
 
-          {plants.map((plant, index) => (
-            <PlantCard
-              key={plant.name || plant.scientificName || index}
-              plant={plant}
-            />
-          ))}
+          <div style={{ display: "grid", gap: 14 }}>
+            {results.map((plant) => (
+              <article
+                key={plant.id}
+                style={{
+                  background: "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  padding: 18,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    alignItems: "start",
+                  }}
+                >
+                  <div>
+                    <p style={{ margin: 0, color: "#1b5e20", fontWeight: 700 }}>
+                      Proposition #{plant.rank}
+                    </p>
+                    <h3 style={{ margin: "6px 0" }}>
+                      {plant.name}
+                    </h3>
+                    <p style={{ margin: 0, fontStyle: "italic" }}>
+                      {plant.scientificName || plant.species}
+                    </p>
+                  </div>
+
+                  <strong
+                    style={{
+                      background: "#dcfce7",
+                      color: "#166534",
+                      padding: "8px 10px",
+                      borderRadius: 999,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {percent(plant.confidence)}
+                  </strong>
+                </div>
+
+                <hr style={{ border: 0, borderTop: "1px solid #e5e7eb", margin: "16px 0" }} />
+
+                <p><strong>Famille :</strong> {plant.family}</p>
+                <p><strong>Genre :</strong> {plant.genus}</p>
+
+                {plant.commonNames?.length > 0 && (
+                  <p>
+                    <strong>Noms communs :</strong>{" "}
+                    {plant.commonNames.join(", ")}
+                  </p>
+                )}
+
+                <div
+                  style={{
+                    height: 10,
+                    borderRadius: 99,
+                    background: "#e5e7eb",
+                    overflow: "hidden",
+                    marginTop: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: percent(plant.confidence),
+                      height: "100%",
+                      background: "#1b5e20",
+                    }}
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       )}
-    </div>
+    </section>
   );
 }

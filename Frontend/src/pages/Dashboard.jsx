@@ -14,7 +14,7 @@ export default function Dashboard() {
       .catch((err) => {
         console.error("Erreur API /stats :", err);
         setError(
-          "Impossible de charger les statistiques. Vérifie que le backend fonctionne sur le port 5000."
+          
         );
       });
   }, []);
