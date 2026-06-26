@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import api from "../api";
 import "leaflet/dist/leaflet.css";
@@ -50,6 +50,21 @@ function hasValidCoordinates(plant) {
     longitude <= 180
   );
 }
+
+function MapFix() {
+  const map = useMap();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [map]);
+
+  return null;
+}
+
 
 export default function Map() {
   const [plants, setPlants] = useState([]);
@@ -302,77 +317,37 @@ export default function Map() {
               )}
             </div>
 
-            <div id="plant-map" style={styles.mapContainer}>
-              <MapContainer
-                key={`${mapCenter[0]}-${mapCenter[1]}`}
-                center={mapCenter}
-                zoom={selectedPlant ? 13 : 6}
-                scrollWheelZoom
-                style={styles.map}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
+            <div id="plant-map" style={{ width: "100%", height: 600 }}>
+  <MapContainer
+    center={mapCenter}
+    zoom={selectedPlant ? 13 : 6}
+    scrollWheelZoom={true}
+    style={{ width: "100%", height: "100%" }}
+  >
+    <MapFix />
 
-                {filteredPlants.map((plant) => {
-                  const imageUrl = plant.imageUrl
-                    ? `${API_URL}${plant.imageUrl}`
-                    : null;
+    <TileLayer
+      attribution='&copy; OpenStreetMap'
+      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    />
 
-                  return (
-                    <Marker
-                      key={plant.id}
-                      position={[
-                        Number(plant.latitude),
-                        Number(plant.longitude),
-                      ]}
-                    >
-                      <Popup>
-                        <div style={{ minWidth: 190 }}>
-                          {imageUrl && (
-                            <img
-                              src={imageUrl}
-                              alt={plant.name || plant.species || "Plante"}
-                              style={{
-                                width: "100%",
-                                height: 110,
-                                objectFit: "cover",
-                                borderRadius: 8,
-                                marginBottom: 8,
-                              }}
-                            />
-                          )}
-
-                          <strong style={{ display: "block", fontSize: 15 }}>
-                            {plant.name || "Nom inconnu"}
-                          </strong>
-
-                          <em
-                            style={{
-                              display: "block",
-                              color: "#58705e",
-                              marginTop: 3,
-                            }}
-                          >
-                            {plant.species || "Espèce inconnue"}
-                          </em>
-
-                          <p style={{ margin: "8px 0 4px", fontSize: 12 }}>
-                            Fiabilité :{" "}
-                            <strong>{Number(plant.confidence || 0).toFixed(1)}%</strong>
-                          </p>
-
-                          <p style={{ margin: 0, fontSize: 12 }}>
-                            {getConfidenceLabel(plant.confidence)}
-                          </p>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  );
-                })}
-              </MapContainer>
-            </div>
+    {filteredPlants.map((plant) => (
+      <Marker
+        key={plant.id}
+        position={[
+          Number(plant.latitude),
+          Number(plant.longitude),
+        ]}
+      >
+        <Popup>
+          <strong>{plant.name || "Nom inconnu"}</strong>
+          <br />
+          {plant.species || "Espèce inconnue"}
+        </Popup>
+      </Marker>
+    ))}
+  </MapContainer>
+</div>
 
             {selectedPlant && (
               <div style={styles.selectedDetails}>
@@ -410,6 +385,8 @@ export default function Map() {
     </section>
   );
 }
+
+
 
 const styles = {
   page: {
@@ -689,10 +666,9 @@ const styles = {
   },
 
   mapContainer: {
-    width: "100%",
-    height: "clamp(360px, 60vh, 620px)",
-    background: "#e9f2e9",
-  },
+  width: "100%",
+  height: 600,
+},
 
   map: {
     width: "100%",
