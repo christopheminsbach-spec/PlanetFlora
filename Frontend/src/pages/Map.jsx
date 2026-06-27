@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
-import api from "../api";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster";
+import "leaflet.heat";
+import api from "../api";
 
 /* =========================
    FIX LEAFLET ICONS
@@ -18,259 +20,314 @@ L.Icon.Default.mergeOptions({
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const selectedIcon = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [30, 50],
-  iconAnchor: [15, 50],
-});
-
-const API_URL = "http://localhost:3000";
 const DEFAULT_CENTER = [48.8566, 2.3522];
 
 /* =========================
-   UTILITIES
+   UTIL
 ========================= */
-function formatDate(value) {
-  if (!value) return "Date inconnue";
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function getConfidenceLabel(value) {
-  const c = Number(value || 0);
-  if (c >= 80) return "Très fiable";
-  if (c >= 55) return "Probable";
-  return "À vérifier";
-}
-
-function isValidCoords(p) {
+function isValid(p) {
   const lat = Number(p.latitude);
   const lng = Number(p.longitude);
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat !== 0 &&
-    lng !== 0
-  );
+  return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
+function formatDate(date) {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "medium",
+  }).format(new Date(date));
 }
 
 /* =========================
-   FIX MAP RENDER (IMPORTANT VITE)
+   MAP LAYERS CONTROL
 ========================= */
-function MapFix() {
+function MapController({
+  plants,
+  showHeat,
+  timelineValue,
+}) {
   const map = useMap();
+  const clusterRef = useRef(null);
+  const heatRef = useRef(null);
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      map.invalidateSize();
-    }, 300);
+    if (!map) return;
 
-    return () => clearTimeout(t);
-  }, [map]);
+    const L = window.L;
+
+    /* CLEAN OLD LAYERS */
+    if (clusterRef.current) {
+      map.removeLayer(clusterRef.current);
+    }
+    if (heatRef.current) {
+      map.removeLayer(heatRef.current);
+    }
+
+    const filtered = plants.filter(isValid);
+
+    const visiblePlants = filtered.filter((p) => {
+      if (!timelineValue) return true;
+      return new Date(p.createdAt) <= new Date(timelineValue);
+    });
+
+    /* =========================
+       CLUSTER
+    ========================= */
+    const cluster = L.markerClusterGroup();
+
+    visiblePlants.forEach((p) => {
+      const marker = L.marker([p.latitude, p.longitude]);
+
+      marker.bindPopup(`
+        <b>${p.name || "Plante"}</b><br/>
+        ${p.species || ""}<br/>
+        ${formatDate(p.createdAt)}
+      `);
+
+      cluster.addLayer(marker);
+    });
+
+    clusterRef.current = cluster;
+    map.addLayer(cluster);
+
+    /* =========================
+       HEATMAP
+    ========================= */
+    if (showHeat) {
+      const heatPoints = visiblePlants.map((p) => [
+        p.latitude,
+        p.longitude,
+        0.6,
+      ]);
+
+      const heat = L.heatLayer(heatPoints, {
+        radius: 25,
+        blur: 18,
+      });
+
+      heatRef.current = heat;
+      map.addLayer(heat);
+    }
+
+    return () => {
+      if (clusterRef.current) map.removeLayer(clusterRef.current);
+      if (heatRef.current) map.removeLayer(heatRef.current);
+    };
+  }, [map, plants, showHeat, timelineValue]);
 
   return null;
 }
 
 /* =========================
-   MAIN COMPONENT
+   MAIN MAP
 ========================= */
 export default function Map() {
   const [plants, setPlants] = useState([]);
   const [search, setSearch] = useState("");
+  const [speciesFilter, setSpeciesFilter] = useState("");
   const [selectedPlant, setSelectedPlant] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const [showHeat, setShowHeat] = useState(false);
+  const [satellite, setSatellite] = useState(false);
+
+  const [timeline, setTimeline] = useState("");
 
   /* LOAD */
   const loadPlants = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
+  try {
+    const res = await api.get("/plants");
 
-      const res = await api.get("/plants");
-      const data = Array.isArray(res.data) ? res.data : [];
+    console.log("API RESPONSE:", res.data);
 
-      setPlants(data);
-      setSelectedPlant(data.find(isValidCoords) || null);
-    } catch (e) {
-      setError("Impossible de charger les plantes.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const data = Array.isArray(res.data) ? res.data : [];
 
-  useEffect(() => {
-    loadPlants();
-  }, [loadPlants]);
+    setPlants(data);
+  } catch (err) {
+    console.error("LOAD PLANTS ERROR:", err);
+    alert("Erreur API /plants → regarde le backend");
+  }
+}, []);
 
   /* FILTERS */
-  const validPlants = useMemo(
-    () => plants.filter(isValidCoords),
-    [plants]
-  );
-
   const filteredPlants = useMemo(() => {
-    const s = search.toLowerCase().trim();
-    if (!s) return validPlants;
+    return plants.filter((p) => {
+      if (!isValid(p)) return false;
 
-    return validPlants.filter((p) =>
-      (p.name || "").toLowerCase().includes(s) ||
-      (p.species || "").toLowerCase().includes(s)
-    );
-  }, [validPlants, search]);
+      const matchSearch =
+        p.name?.toLowerCase().includes(search.toLowerCase()) ||
+        p.species?.toLowerCase().includes(search.toLowerCase());
 
-  /* CENTER */
-  const center =
-    selectedPlant && isValidCoords(selectedPlant)
-      ? [Number(selectedPlant.latitude), Number(selectedPlant.longitude)]
-      : filteredPlants.length
-      ? [Number(filteredPlants[0].latitude), Number(filteredPlants[0].longitude)]
-      : DEFAULT_CENTER;
+      const matchSpecies =
+        !speciesFilter ||
+        p.species?.toLowerCase() === speciesFilter.toLowerCase();
 
+      return matchSearch && matchSpecies;
+    });
+  }, [plants, search, speciesFilter]);
+
+  const speciesList = useMemo(() => {
+    return [...new Set(plants.map((p) => p.species).filter(Boolean))];
+  }, [plants]);
+
+  const center = selectedPlant
+    ? [selectedPlant.latitude, selectedPlant.longitude]
+    : DEFAULT_CENTER;
+
+  /* =========================
+     UI
+  ========================= */
   return (
-    <section style={styles.page}>
+    <div style={styles.page}>
+      <div style={styles.layout}>
 
-      {/* HEADER */}
-      <header style={styles.header}>
-        <div>
-          <p style={styles.eyebrow}>EXPLORATION BOTANIQUE</p>
-          <h1 style={styles.title}>Carte des identifications</h1>
-          <p style={styles.subtitle}>
-            Visualisez vos plantes analysées avec IA
-          </p>
-        </div>
+        {/* ================= SIDEBAR ================= */}
+        <div style={styles.sidebar}>
 
-        <button onClick={loadPlants} style={styles.refreshButton}>
-          ↻ Actualiser
-        </button>
-      </header>
+          <h2>🌿 Plantes</h2>
 
-      {/* STATS */}
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>🌿 {plants.length} analyses</div>
-        <div style={styles.statCard}>📍 {validPlants.length} localisées</div>
-        <div style={styles.statCard}>
-          🗺️{" "}
-          {plants.length
-            ? Math.round((validPlants.length / plants.length) * 100)
-            : 0}
-          %
-        </div>
-      </div>
+          <input
+            placeholder="Rechercher..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={styles.input}
+          />
 
-      {error && <div style={styles.error}>{error}</div>}
+          <select
+            value={speciesFilter}
+            onChange={(e) => setSpeciesFilter(e.target.value)}
+            style={styles.input}
+          >
+            <option value="">Toutes les espèces</option>
+            {speciesList.map((s, i) => (
+              <option key={i} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
 
-      {loading ? (
-        <div style={styles.empty}>Chargement...</div>
-      ) : (
-        <div style={styles.grid}>
+          {/* HISTORY */}
+          <h3 style={{ marginTop: 15 }}>Historique</h3>
 
-          {/* SIDEBAR */}
-          <aside style={styles.sidebar}>
-            <h2>Plantes localisées</h2>
-
-            <input
-              placeholder="Rechercher..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={styles.input}
-            />
-
-            <div style={styles.list}>
-              {filteredPlants.map((p) => (
-                <button
+          <div style={styles.history}>
+            {filteredPlants
+              .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+              .map((p) => (
+                <div
                   key={p.id}
                   onClick={() => setSelectedPlant(p)}
-                  style={styles.item}
+                  style={styles.historyItem}
                 >
-                  🌱 {p.name || "Plante"}
-                </button>
+                  <b>{p.name}</b>
+                  <div style={{ fontSize: 12, opacity: 0.6 }}>
+                    {formatDate(p.createdAt)}
+                  </div>
+                </div>
               ))}
-            </div>
-          </aside>
+          </div>
 
-          {/* MAP PANEL */}
-          <div style={styles.mapPanel}>
-            <div style={styles.mapHeader}>
-              <h2>Carte interactive</h2>
-              {selectedPlant && (
-                <span>
-                  📍 {Number(selectedPlant.latitude).toFixed(3)},
-                  {Number(selectedPlant.longitude).toFixed(3)}
-                </span>
-              )}
-            </div>
+          {/* CONTROLS */}
+          <div style={styles.controls}>
+            <label>
+              <input
+                type="checkbox"
+                checked={showHeat}
+                onChange={(e) => setShowHeat(e.target.checked)}
+              />
+              Heatmap
+            </label>
 
-            {/* MAP FIXED */}
-            <div style={{ height: 600, width: "100%" }}>
-              <MapContainer
-                center={center}
-                zoom={selectedPlant ? 13 : 5}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <MapFix />
+            <label>
+              <input
+                type="checkbox"
+                checked={satellite}
+                onChange={(e) => setSatellite(e.target.checked)}
+              />
+              Satellite
+            </label>
+          </div>
 
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-               {filteredPlants.map((plant) => {
-  const isSelected = selectedPlant?.id === plant.id;
-
-  return (
-    <Marker
-      key={plant.id}
-      position={[Number(plant.latitude), Number(plant.longitude)]}
-      icon={isSelected ? selectedIcon : undefined}
-      eventHandlers={{
-        click: () => setSelectedPlant(plant),
-      }}
-    >
-      <Popup>
-        <strong>{plant.name || "Plante"}</strong>
-        <br />
-        {plant.species || "Espèce inconnue"}
-        <br />
-        📅 {formatDate(plant.createdAt)}
-      </Popup>
-    </Marker>
-  );
-})}
-               
-              </MapContainer>
-            </div>
+          {/* TIMELINE */}
+          <div>
+            <h4>Timeline</h4>
+            <input
+              type="date"
+              value={timeline}
+              onChange={(e) => setTimeline(e.target.value)}
+              style={styles.input}
+            />
           </div>
         </div>
-      )}
-    </section>
+
+        {/* ================= MAP ================= */}
+        <div style={styles.mapBox}>
+          <MapContainer
+            center={center}
+            zoom={6}
+            style={{ height: "100%", width: "100%" }}
+          >
+            <TileLayer
+  url={
+    satellite
+      ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  }
+/>
+
+            <MapController
+              plants={filteredPlants}
+              showHeat={showHeat}
+              timelineValue={timeline}
+            />
+          </MapContainer>
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* =========================
-   STYLES MINIMAL CLEAN
+   STYLES
 ========================= */
 const styles = {
-  page: { padding: 20, background: "#0b1220", color: "white" },
-  header: { display: "flex", justifyContent: "space-between" },
-  eyebrow: { color: "#22c55e" },
-  title: { fontSize: 28 },
-  subtitle: { opacity: 0.7 },
-  refreshButton: { background: "#22c55e", padding: 10, borderRadius: 10 },
-  statsGrid: { display: "flex", gap: 10, margin: "20px 0" },
-  statCard: { background: "#111827", padding: 10, borderRadius: 10 },
-  error: { color: "red" },
-  empty: { padding: 50 },
-  grid: { display: "grid", gridTemplateColumns: "300px 1fr", gap: 20 },
-  sidebar: { background: "#111827", padding: 15, borderRadius: 10 },
-  input: { width: "100%", padding: 8 },
-  list: { marginTop: 10 },
-  item: { display: "block", width: "100%", textAlign: "left" },
-  mapPanel: { background: "#111827", borderRadius: 10, overflow: "hidden" },
-  mapHeader: {
-    display: "flex",
-    justifyContent: "space-between",
+  page: {
+    height: "100vh",
+    background: "#0b1220",
+    color: "white",
+  },
+  layout: {
+    display: "grid",
+    gridTemplateColumns: "320px 1fr",
+    height: "100%",
+  },
+  sidebar: {
+    padding: 15,
+    background: "#111827",
+    overflowY: "auto",
+  },
+  mapBox: {
+    height: "100%",
+  },
+  input: {
+    width: "100%",
+    padding: 8,
+    marginBottom: 10,
+    borderRadius: 6,
+  },
+  history: {
+    maxHeight: 250,
+    overflowY: "auto",
+  },
+  historyItem: {
     padding: 10,
+    marginBottom: 6,
+    background: "#1f2937",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  controls: {
+    marginTop: 15,
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
   },
 };
