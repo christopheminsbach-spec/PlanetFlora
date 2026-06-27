@@ -14,6 +14,22 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [username, setUsername] = useState("");
+
+  {mode === "register" && (
+  <label style={styles.label}>
+    Nom d'utilisateur
+    <input
+      type="text"
+      value={username}
+      onChange={(e) => setUsername(e.target.value)}
+      placeholder="angus"
+      style={styles.input}
+      required
+    />
+  </label>
+)}
+
   const submit = async (event) => {
     event.preventDefault();
 
@@ -25,23 +41,30 @@ export default function Login() {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
 
       const payload =
-        mode === "login"
-          ? { email, password }
-          : { name, email, password };
+  mode === "login"
+    ? {
+        email,
+        password,
+      }
+    : {
+        username,
+        name,
+        email,
+        password,
+      };
 
       const response = await api.post(endpoint, payload);
 
-      localStorage.setItem("planet_flora_token", response.data.token);
-      localStorage.setItem(
-        "planet_flora_user",
-        JSON.stringify(response.data.user)
-      );
+      localStorage.setItem("token", response.data.token);
+
+localStorage.setItem(
+  "user",
+  JSON.stringify(response.data.user)
+);
 
       setMessage(response.data.message);
 
-      setTimeout(() => {
-        navigate("/home");
-      }, 500);
+      navigate("/home");
     } catch (err) {
       setError(
         err.response?.data?.message ||

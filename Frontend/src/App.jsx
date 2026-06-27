@@ -8,6 +8,14 @@ import Login from "./pages/Login";
 
 const API_URL = "http://localhost:3000";
 
+const user = JSON.parse(localStorage.getItem("user"));
+
+<div className="userBox">
+    👤 {user?.name}
+    <br />
+    <small>{user?.email}</small>
+</div>
+
 const links = [
   { to: "/home", label: "🏠 Dashboard" },
   { to: "/upload", label: "📷 Identifier une plante" },
@@ -15,6 +23,17 @@ const links = [
   { to: "/analytics", label: "📊 Analytics" },
   { to: "/map", label: "🗺️ Carte" },
 ];
+
+const logout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
+};
+
+
+<button onClick={logout}>
+    Déconnexion
+</button>
 
 function Layout() {
   const navigate = useNavigate();
@@ -26,6 +45,7 @@ function Layout() {
     localStorage.removeItem("user");
     navigate("/login", { replace: true });
   }
+
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", fontFamily: "Arial, sans-serif" }}>
@@ -133,6 +153,7 @@ function Layout() {
     </div>
   );
 }
+
 
 export default function App() {
   return (
